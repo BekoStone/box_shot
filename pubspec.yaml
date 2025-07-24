@@ -1,0 +1,64 @@
+name: box_shot
+description: "A new Flutter project."
+
+publish_to: 'none' 
+
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  flame: ^1.30.1
+  flame_audio: ^2.11.8
+  shared_preferences: ^2.5.3
+  provider: ^6.1.5
+  google_fonts: ^6.2.1
+  firebase_core: ^3.15.1
+  firebase_auth: ^5.6.2
+  cloud_firestore: ^5.6.11
+  firebase_analytics: ^11.5.2
+  google_sign_in: ^7.1.1
+
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+
+  flutter_test:
+    sdk: flutter
+
+
+  flutter_lints: ^5.0.0
+
+  flutter_native_splash: ^2.4.6
+
+flutter_native_splash:
+  color: "#1E1E1E"
+  image: assets/images/ui/splash.png
+  android: true
+  ios: true
+  fullscreen: true
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+
+  # To add assets to your application, add an assets section, like this:
+  assets:
+    - assets/images/blocks/
+    - assets/images/ui/
+    - assets/images/backgrounds/
+    - assets/audio/sfx/
+    - assets/audio/music/
