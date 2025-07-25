@@ -1,5 +1,3 @@
-// ✅ File: lib/game/components/block_component.dart
-
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/material.dart';
@@ -8,11 +6,12 @@ import 'game_scene.dart';
 
 class BlockComponent extends PositionComponent
     with HasGameRef<BoxHooksGame>, DragCallbacks {
-  static const double cellSize = 28;
-  static const double spacing = 2;
+  static const double cellSize = 36; // ✅ كان 28
+  static const double spacing = 3;   // ✅ كان 2
 
   final List<List<int>> shape;
   bool isLocked = false;
+  late Vector2 originalPosition;
 
   BlockComponent({required this.shape}) {
     final width = shape[0].length;
@@ -29,6 +28,7 @@ class BlockComponent extends PositionComponent
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    originalPosition = position.clone();
 
     for (int row = 0; row < shape.length; row++) {
       for (int col = 0; col < shape[row].length; col++) {
@@ -72,18 +72,15 @@ class BlockComponent extends PositionComponent
       }
     }
 
-    // ✅ لا تسكن فوق قطعة موجودة تحت
     for (final other in scene.activeBlocks) {
-      if (other != this &&
-          toRect().overlaps(other.toRect())) {
-        // رجعه مكانه
-        position = Vector2((gameRef.size.x - size.x) / 2, gameRef.size.y - 100);
+      if (other != this && toRect().overlaps(other.toRect())) {
+        position = originalPosition.clone();
         return;
       }
     }
 
     if (!scene.canPlaceBlock(this, closest)) {
-      position = Vector2((gameRef.size.x - size.x) / 2, gameRef.size.y - 100);
+      position = originalPosition.clone();
       return;
     }
 
@@ -100,6 +97,3 @@ class BlockComponent extends PositionComponent
     super.onDragEnd(event);
   }
 }
-
-
-
