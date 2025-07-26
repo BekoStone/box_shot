@@ -277,56 +277,115 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
     }
   }
 
-  // ✅ FIXED: Remove actual placed block components
+  // ✅ FIXED: Smart partial block removal
   void clearLines(List<int> rows, List<int> cols) {
-    Set<BlockComponent> blocksToRemove = {};
-    int clearedCellCount = 0;
+    Set<Vector2> cellsToRemove = {};
+    Map<BlockComponent, Set<Vector2>> affectedBlocks = {};
 
     print('🧹 Starting line clear - Rows: $rows, Cols: $cols');
 
-    // Mark cells for clearing and collect unique block components
+    // Collect all cells that need to be cleared
     for (int row in rows) {
       for (int col = 1; col < extendedGridSize - 1; col++) {
-        if (placedBlocks[row][col] != null) {
-          blocksToRemove.add(placedBlocks[row][col]!);
-          occupiedGrid[row][col] = false;
-          placedBlocks[row][col] = null;
-          clearedCellCount++;
-          print('🎯 Marked cell ($row, $col) for clearing');
-        }
+        cellsToRemove.add(Vector2(col.toDouble(), row.toDouble()));
       }
     }
 
     for (int col in cols) {
       for (int row = 1; row < extendedGridSize - 1; row++) {
-        if (placedBlocks[row][col] != null) {
-          blocksToRemove.add(placedBlocks[row][col]!);
-          occupiedGrid[row][col] = false;
-          placedBlocks[row][col] = null;
-          clearedCellCount++;
-          print('🎯 Marked cell ($row, $col) for clearing');
-        }
+        cellsToRemove.add(Vector2(col.toDouble(), row.toDouble()));
       }
     }
 
-    print('📦 Found ${blocksToRemove.length} unique block components to remove');
-    print('🔍 Cleared $clearedCellCount individual cells');
+    print('📍 Total cells to clear: ${cellsToRemove.length}');
 
-    // ✅ Remove the actual block components
-    for (BlockComponent block in blocksToRemove) {
-      try {
-        remove(block);
-        print('🗑️ Removed block component successfully');
-      } catch (e) {
-        print('❌ Error removing block: $e');
+    // Find all blocks that are affected by line clearing
+    for (final cell in cellsToRemove) {
+      final row = cell.y.toInt();
+      final col = cell.x.toInt();
+      
+      if (placedBlocks[row][col] != null) {
+        final block = placedBlocks[row][col]!;
+        
+        if (!affectedBlocks.containsKey(block)) {
+          affectedBlocks[block] = {};
+        }
+        affectedBlocks[block]!.add(cell);
+        
+        // Clear the cell
+        occupiedGrid[row][col] = false;
+        placedBlocks[row][col] = null;
       }
+    }
+
+    print('🎯 Found ${affectedBlocks.length} affected blocks');
+
+    // Process each affected block
+    for (final entry in affectedBlocks.entries) {
+      final block = entry.key;
+      final clearedCells = entry.value;
+      
+      print('🔍 Processing block with ${clearedCells.length} cleared cells');
+      
+      // Find remaining cells of this block
+      final remainingCells = _findRemainingCells(block, clearedCells);
+      
+      if (remainingCells.isNotEmpty) {
+        print('♻️ Creating new block from ${remainingCells.length} remaining cells');
+        _createBlockFromCells(remainingCells);
+      }
+      
+      // Remove the original block
+      remove(block);
+      print('🗑️ Removed original block');
     }
 
     print('✅ Line clearing completed');
+  }
 
-    // TODO: Add scoring logic here
-    // final clearedCells = clearedCellCount;
-    // _updateScore(rows.length, cols.length, clearedCells);
+  // ✅ NEW: Find remaining cells of a block after line clearing
+  Set<Vector2> _findRemainingCells(BlockComponent block, Set<Vector2> clearedCells) {
+    Set<Vector2> remainingCells = {};
+    
+    // Find all cells this block currently occupies
+    for (int row = 1; row < extendedGridSize - 1; row++) {
+      for (int col = 1; col < extendedGridSize - 1; col++) {
+        if (placedBlocks[row][col] == block) {
+          final cellPos = Vector2(col.toDouble(), row.toDouble());
+          
+          // If this cell wasn't cleared, it's remaining
+          if (!clearedCells.contains(cellPos)) {
+            remainingCells.add(cellPos);
+          }
+        }
+      }
+    }
+    
+    return remainingCells;
+  }
+
+  // ✅ NEW: Create new block components from remaining cells
+  void _createBlockFromCells(Set<Vector2> cells) {
+    // For simplicity, create individual 1x1 blocks for each remaining cell
+    // TODO: Later optimize to group adjacent cells into larger shapes
+    
+    for (final cell in cells) {
+      final row = cell.y.toInt();
+      final col = cell.x.toInt();
+      
+      // Create a 1x1 block
+      final newBlock = BlockComponent(shape: [[1]]);
+      newBlock.position = gridPositions[row][col];
+      newBlock.isLocked = true;
+      
+      add(newBlock);
+      
+      // Mark cell as occupied by new block
+      occupiedGrid[row][col] = true;
+      placedBlocks[row][col] = newBlock;
+      
+      print('🔲 Created 1x1 block at ($row, $col)');
+    }
   }
 
   // ✅ NEW: Debug method to visualize grid mapping
