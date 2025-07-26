@@ -25,7 +25,7 @@ class GameOverOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black.withAlpha(204),
+      color: Colors.black.withOpacity(0.8),
       child: Center(
         child: Container(
           margin: const EdgeInsets.all(40),
@@ -35,7 +35,7 @@ class GameOverOverlay extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withAlpha(77),
+                color: Colors.black.withOpacity(0.3),
                 blurRadius: 10,
                 offset: const Offset(0, 5),
               ),
@@ -60,7 +60,7 @@ class GameOverOverlay extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                 decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(51),
+                  color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: Column(
@@ -91,7 +91,7 @@ class GameOverOverlay extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(25),
+                  color: Colors.white.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: Column(

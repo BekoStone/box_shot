@@ -206,4 +206,14 @@ class ScoringManager {
     _lastClearWasDifficult = false;
     print('🔄 Score reset for new game');
   }
+  
+  // ✅ NEW: Restore state for undo functionality
+  void restoreState(int score, int level, int linesCleared, int comboCount, int streakCount) {
+    _currentScore = score;
+    _level = level;
+    _linesCleared = linesCleared;
+    _comboCount = comboCount;
+    _streakCount = streakCount;
+    print('↩️ Score state restored: $score points, level $level');
+  }
 }

@@ -26,7 +26,7 @@ class AppRoot extends StatelessWidget {
               onShop: game.openShop,
               onSettings: game.openSettings,
             ),
-        // ✅ NEW: Game Over Overlay
+        // ✅ Game Over Overlay (simplified)
         'GameOver': (context, _) => GameOverOverlay(
               finalScore: game.getFinalScore(),
               level: game.getFinalLevel(),

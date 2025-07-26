@@ -58,6 +58,37 @@ class BoxHooksGame extends FlameGame with DragCallbacks, TapCallbacks, HasCollis
     return _gameScene?.gridFillPercentage ?? 0.0;
   }
 
+  // ✅ NEW: Undo support
+  bool canUndoLastMove() {
+    return _gameScene?.undoManager.canUndo ?? false;
+  }
+
+  void undoLastMove() {
+    print('↩️ Attempting undo from game over...');
+    
+    if (_gameScene != null && _gameScene!.undoManager.canUndo) {
+      // Remove game over overlay
+      overlays.remove('GameOver');
+      
+      // Perform undo
+      final success = _gameScene!.performUndo();
+      
+      if (success) {
+        // Return to playing state
+        currentState = GameState.playing;
+        print('✅ Undo successful - returned to playing state');
+        print('🎮 Game state: ${currentState}');
+        print('🔓 Game over flag: ${_gameScene!.isGameOver}');
+      } else {
+        // If undo failed, show game over again
+        overlays.add('GameOver');
+        print('❌ Undo failed - showing game over again');
+      }
+    } else {
+      print('❌ Cannot undo - no game scene or no undo available');
+    }
+  }
+
   void restartGame() {
     print('🔄 Restarting game from BoxHooksGame...');
     
@@ -102,26 +133,32 @@ class BoxHooksGame extends FlameGame with DragCallbacks, TapCallbacks, HasCollis
     
     print('📤 Sharing score: $score (Level $level)');
     
- 
+    // - Social media sharing
+    // - Copy to clipboard
+    // - Screenshot with score
     
     // For now, just print the share text
     final shareText = "I just scored $score points in Box Hooks! Can you beat my level $level record? 🎮";
     print('Share text: $shareText');
   }
 
+  // ✅ NEW: Test undo functionality
+  void testUndo() {
+    if (_gameScene != null) {
+      _gameScene!.onUndoButtonTapped();
+    }
+  }
+
   // ✅ Existing methods (unchanged)
   void claimDailyReward() {
     print('🎁 Daily reward claimed!');
-
   }
 
   void openShop() {
     print('🛒 Opening shop...');
-    
   }
 
   void openSettings() {
     print('⚙️ Opening settings...');
-  
   }
 }

@@ -56,6 +56,8 @@ class BlockComponent extends PositionComponent
 
   @override
   void onDragEnd(DragEndEvent event) {
+    if (isLocked) return; // ✅ FIX: Prevent drag if locked
+    
     final scene = gameRef.children.whereType<GameScene>().first;
 
     // ✅ IMPROVED: Use new precise snap position calculation
@@ -83,11 +85,26 @@ class BlockComponent extends PositionComponent
     scene.markBlockOccupied(this, snapPosition);
     scene.activeBlocks.remove(this);
 
+    // ✅ FIX: Update original position to prevent visual duplication
+    originalPosition = position.clone();
+
     // Spawn new blocks if all are placed
     if (scene.activeBlocks.isEmpty) {
       scene.spawnThreeBlocks();
     }
 
     super.onDragEnd(event);
+  }
+
+  // ✅ NEW: Reset to original position (for undo)
+  void resetToOriginal() {
+    position = originalPosition.clone();
+    isLocked = false;
+  }
+
+  // ✅ NEW: Update original position (when block spawns)
+  void updateOriginalPosition(Vector2 newPosition) {
+    originalPosition = newPosition.clone();
+    position = newPosition.clone();
   }
 }
