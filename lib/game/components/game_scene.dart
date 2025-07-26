@@ -1,9 +1,13 @@
 // ignore_for_file: avoid_print
 
+import 'package:box_shot/game/game_state.dart';
 import 'package:flame/components.dart';
+import 'package:flame/effects.dart';
 import 'package:flutter/material.dart';
 import '../box_hooks_game.dart';
 import '../factory/shape_factory.dart';
+import '../managers/scoring_manager.dart';
+import '../managers/game_over_manager.dart'; // ✅ NEW: Import game over detection
 import 'block_component.dart';
 import 'block_slot_component.dart' as slot;
 
@@ -13,23 +17,37 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
   static const double spacing = 3;
   static const int extendedGridSize = gridSize + 2;
 
+  // ✅ Make grid properties accessible for GameOverManager
   late List<List<Vector2>> gridPositions;
   late List<List<bool>> occupiedGrid;
   late List<List<Component?>> visualGrid;
+  late List<List<BlockComponent?>> placedBlocks;
   
-  // ✅ NEW: Grid calculation properties for precise mapping
+  // ✅ Grid calculation properties for precise mapping
   late double _gridStartX;
   late double _gridStartY;
-  late double _cellStep; // cellSize + spacing
+  late double _cellStep;
+
+  // ✅ NEW: Scoring system and game state
+  final ScoringManager scoring = ScoringManager();
+  late TextComponent scoreDisplay;
+  late TextComponent levelDisplay;
+  late TextComponent comboDisplay;
+  
+  bool _gameOver = false;
+  bool _gameOverProcessed = false;
 
   final List<BlockComponent> activeBlocks = [];
   final List<slot.BlockSlotComponent> slots = [];
+  
+  // ✅ NEW: Getters for external access
+  List<BlockComponent> get activeBlocksList => activeBlocks;
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
     
-    // ✅ IMPROVED: Calculate grid parameters once
+    // Calculate grid parameters
     _cellStep = cellSize + spacing;
     final screenSize = gameRef.size;
     final totalSize = (cellSize * gridSize) + (spacing * (gridSize - 1));
@@ -38,12 +56,10 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
 
     _initializeGrids();
     _createGridVisuals();
+    _createUI();
     _createSlots();
     spawnThreeBlocks();
   }
-
-  // ✅ NEW: Track placed block components instead of creating duplicates
-  late List<List<BlockComponent?>> placedBlocks;
 
   void _initializeGrids() {
     gridPositions = List.generate(
@@ -59,7 +75,6 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
       ),
     );
 
-    // ✅ Track actual placed block components instead of visual grid
     placedBlocks = List.generate(
       extendedGridSize,
       (_) => List.filled(extendedGridSize, null),
@@ -97,7 +112,70 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
     }
   }
 
-  // ✅ NEW: Precise coordinate-to-grid conversion
+  // ✅ NEW: Create UI elements for scoring
+  void _createUI() {
+    final screenSize = gameRef.size;
+    
+    // Score display
+    scoreDisplay = TextComponent(
+      text: 'Score: 0',
+      position: Vector2(20, 50),
+      textRenderer: TextPaint(
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+    add(scoreDisplay);
+    
+    // Level display
+    levelDisplay = TextComponent(
+      text: 'Level: 1',
+      position: Vector2(screenSize.x - 120, 50),
+      textRenderer: TextPaint(
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+    add(levelDisplay);
+    
+    // Combo display
+    comboDisplay = TextComponent(
+      text: '',
+      position: Vector2(screenSize.x / 2 - 50, 100),
+      textRenderer: TextPaint(
+        style: const TextStyle(
+          color: Colors.orangeAccent,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+    add(comboDisplay);
+  }
+
+  // ✅ NEW: Update UI displays
+  void _updateUI() {
+    final data = scoring.getScoreData();
+    
+    scoreDisplay.text = 'Score: ${data['formattedScore']}';
+    levelDisplay.text = 'Level: ${data['level']}';
+    
+    if (data['combo'] > 0) {
+      comboDisplay.text = 'Combo x${data['combo']}';
+      if (data['streak'] > 0) {
+        comboDisplay.text += ' • Streak x${data['streak']}';
+      }
+    } else {
+      comboDisplay.text = '';
+    }
+  }
+
   Vector2 _worldToGrid(Vector2 worldPos) {
     final relativeX = worldPos.x - _gridStartX;
     final relativeY = worldPos.y - _gridStartY;
@@ -108,20 +186,17 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
     return Vector2(col.toDouble(), row.toDouble());
   }
 
-  // ✅ NEW: Check if grid coordinates are valid
   bool _isValidGridPos(int row, int col) {
     return row > 0 && col > 0 && 
            row < extendedGridSize - 1 && 
            col < extendedGridSize - 1;
   }
 
-  // ✅ NEW: Get snap position from world coordinates
   Vector2 getSnapPosition(Vector2 worldPos) {
     final gridCoord = _worldToGrid(worldPos);
     final row = gridCoord.y.toInt();
     final col = gridCoord.x.toInt();
     
-    // Clamp to valid range
     final clampedRow = row.clamp(1, extendedGridSize - 2);
     final clampedCol = col.clamp(1, extendedGridSize - 2);
     
@@ -161,15 +236,16 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
       activeBlocks.add(block);
       add(block);
     }
+    
+    // ✅ NEW: Check for game over after spawning new blocks
+    _checkGameOver();
   }
 
-  // ✅ IMPROVED: Precise block placement validation
   bool canPlaceBlock(BlockComponent block, Vector2 snapPosition) {
     final gridCoord = _worldToGrid(snapPosition);
     final baseRow = gridCoord.y.toInt();
     final baseCol = gridCoord.x.toInt();
 
-    // Check each cell of the block shape
     for (int shapeRow = 0; shapeRow < block.shape.length; shapeRow++) {
       for (int shapeCol = 0; shapeCol < block.shape[shapeRow].length; shapeCol++) {
         if (block.shape[shapeRow][shapeCol] == 0) continue;
@@ -177,12 +253,10 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
         final gridRow = baseRow + shapeRow;
         final gridCol = baseCol + shapeCol;
 
-        // Check bounds
         if (!_isValidGridPos(gridRow, gridCol)) {
           return false;
         }
 
-        // Check if cell is occupied
         if (occupiedGrid[gridRow][gridCol]) {
           return false;
         }
@@ -192,15 +266,16 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
     return true;
   }
 
-  // ✅ FIXED: Track the actual placed block component
   void markBlockOccupied(BlockComponent block, Vector2 snapPosition) {
+    // ✅ Prevent moves if game is over
+    if (_gameOver) return;
+    
     final gridCoord = _worldToGrid(snapPosition);
     final baseRow = gridCoord.y.toInt();
     final baseCol = gridCoord.x.toInt();
+    
+    int cellsPlaced = 0;
 
-    print('🎯 Marking block at grid ($baseRow, $baseCol)');
-
-    // Mark each cell of the block shape as occupied
     for (int shapeRow = 0; shapeRow < block.shape.length; shapeRow++) {
       for (int shapeCol = 0; shapeCol < block.shape[shapeRow].length; shapeCol++) {
         if (block.shape[shapeRow][shapeCol] == 0) continue;
@@ -210,79 +285,67 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
 
         if (_isValidGridPos(gridRow, gridCol)) {
           occupiedGrid[gridRow][gridCol] = true;
-          // ✅ Store reference to the actual placed block component
           placedBlocks[gridRow][gridCol] = block;
-          
-          print('📍 Marked cell ($gridRow, $gridCol) with block component');
+          cellsPlaced++;
         }
       }
     }
 
+    // ✅ Award points for block placement
+    scoring.awardBlockPlacement(cellsPlaced);
+    _updateUI();
+
     checkForCompletedLines();
+    
+    // ✅ NEW: Check for game over after each move
+    _checkGameOver();
   }
 
-  // ✅ IMPROVED: Optimized line detection with debug logging
   void checkForCompletedLines() {
     List<int> completedRows = [];
     List<int> completedCols = [];
 
-    // Check rows (skip boundary rows 0 and extendedGridSize-1)
+    // Check rows
     for (int row = 1; row < extendedGridSize - 1; row++) {
       bool isRowComplete = true;
-      int occupiedCount = 0;
-      
       for (int col = 1; col < extendedGridSize - 1; col++) {
-        if (occupiedGrid[row][col]) {
-          occupiedCount++;
-        } else {
+        if (!occupiedGrid[row][col]) {
           isRowComplete = false;
+          break;
         }
       }
-      
-      // Debug: Print row status
-      print('Row $row: $occupiedCount/${gridSize} occupied, complete: $isRowComplete');
-      
       if (isRowComplete) {
         completedRows.add(row);
       }
     }
 
-    // Check columns (skip boundary cols 0 and extendedGridSize-1)
+    // Check columns
     for (int col = 1; col < extendedGridSize - 1; col++) {
       bool isColComplete = true;
-      int occupiedCount = 0;
-      
       for (int row = 1; row < extendedGridSize - 1; row++) {
-        if (occupiedGrid[row][col]) {
-          occupiedCount++;
-        } else {
+        if (!occupiedGrid[row][col]) {
           isColComplete = false;
+          break;
         }
       }
-      
-      // Debug: Print column status
-      print('Col $col: $occupiedCount/${gridSize} occupied, complete: $isColComplete');
-      
       if (isColComplete) {
         completedCols.add(col);
       }
     }
 
-    // Clear completed lines if any found
+    // Handle line clearing
     if (completedRows.isNotEmpty || completedCols.isNotEmpty) {
-      print('🎉 CLEARING LINES: Rows: $completedRows, Cols: $completedCols');
       clearLines(completedRows, completedCols);
     } else {
-      print('No completed lines found');
+      // ✅ Reset combo if no lines cleared
+      scoring.resetCombo();
+      _updateUI();
     }
   }
 
-  // ✅ FIXED: Smart partial block removal
   void clearLines(List<int> rows, List<int> cols) {
     Set<Vector2> cellsToRemove = {};
     Map<BlockComponent, Set<Vector2>> affectedBlocks = {};
-
-    print('🧹 Starting line clear - Rows: $rows, Cols: $cols');
 
     // Collect all cells that need to be cleared
     for (int row in rows) {
@@ -296,8 +359,6 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
         cellsToRemove.add(Vector2(col.toDouble(), row.toDouble()));
       }
     }
-
-    print('📍 Total cells to clear: ${cellsToRemove.length}');
 
     // Find all blocks that are affected by line clearing
     for (final cell in cellsToRemove) {
@@ -318,32 +379,48 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
       }
     }
 
-    print('🎯 Found ${affectedBlocks.length} affected blocks');
-
     // Process each affected block
     for (final entry in affectedBlocks.entries) {
       final block = entry.key;
       final clearedCells = entry.value;
       
-      print('🔍 Processing block with ${clearedCells.length} cleared cells');
-      
       // Find remaining cells of this block
       final remainingCells = _findRemainingCells(block, clearedCells);
       
       if (remainingCells.isNotEmpty) {
-        print('♻️ Creating new block from ${remainingCells.length} remaining cells');
         _createBlockFromCells(remainingCells);
       }
       
       // Remove the original block
       remove(block);
-      print('🗑️ Removed original block');
     }
 
-    print('✅ Line clearing completed');
+    // ✅ Award points for line clearing
+    final totalCellsCleared = cellsToRemove.length;
+    final isPerfectClear = _checkPerfectClear();
+    
+    scoring.awardLineClear(
+      linesCleared: rows.length,
+      columnsCleared: cols.length,
+      totalCellsCleared: totalCellsCleared,
+      isPerfectClear: isPerfectClear,
+    );
+    
+    _updateUI();
   }
 
-  // ✅ NEW: Find remaining cells of a block after line clearing
+  // ✅ NEW: Check if board is completely clear
+  bool _checkPerfectClear() {
+    for (int row = 1; row < extendedGridSize - 1; row++) {
+      for (int col = 1; col < extendedGridSize - 1; col++) {
+        if (occupiedGrid[row][col]) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
   Set<Vector2> _findRemainingCells(BlockComponent block, Set<Vector2> clearedCells) {
     Set<Vector2> remainingCells = {};
     
@@ -364,11 +441,8 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
     return remainingCells;
   }
 
-  // ✅ NEW: Create new block components from remaining cells
   void _createBlockFromCells(Set<Vector2> cells) {
-    // For simplicity, create individual 1x1 blocks for each remaining cell
-    // TODO: Later optimize to group adjacent cells into larger shapes
-    
+    // Create individual 1x1 blocks for each remaining cell
     for (final cell in cells) {
       final row = cell.y.toInt();
       final col = cell.x.toInt();
@@ -383,21 +457,135 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame> {
       // Mark cell as occupied by new block
       occupiedGrid[row][col] = true;
       placedBlocks[row][col] = newBlock;
-      
-      print('🔲 Created 1x1 block at ($row, $col)');
     }
   }
 
-  // ✅ NEW: Debug method to visualize grid mapping
-  void debugGrid() {
-    print('Grid Debug Info:');
-    print('Start: ($_gridStartX, $_gridStartY)');
-    print('Cell Step: $_cellStep');
-    print('Extended Grid Size: $extendedGridSize');
+  // ✅ REVERTED: Simple game over detection (working version)
+  void _checkGameOver() {
+    if (_gameOver || _gameOverProcessed) return;
     
-    // Test a few coordinates
-    final testPos = gridPositions[5][5];
-    final mapped = _worldToGrid(testPos);
-    print('Position $testPos maps to grid ($mapped)');
+    final isGameOver = GameOverManager.isGameOver(this);
+    
+    if (isGameOver) {
+      _gameOver = true;
+      _handleGameOver();
+    } else {
+      // ✅ Optional: Check if game is in danger
+      final isInDanger = GameOverManager.isGameInDanger(this);
+      if (isInDanger) {
+        print('⚠️ WARNING: Very few moves remaining!');
+        _showDangerWarning();
+      }
+    }
   }
+  
+  void _handleGameOver() {
+    if (_gameOverProcessed) return;
+    _gameOverProcessed = true;
+    
+    print('🎮 GAME OVER!');
+    
+    // Print final game analysis
+    GameOverManager.printGameAnalysis(this);
+    
+    final finalScore = scoring.currentScore;
+    final level = scoring.level;
+    
+    print('🏆 Final Score: $finalScore');
+    print('📊 Final Level: $level');
+    
+    // ✅ Disable all active blocks
+    for (final block in activeBlocks) {
+      block.isLocked = true;
+    }
+    
+    // ✅ Show game over overlay (will implement UI later)
+    _showGameOverScreen();
+  }
+  
+  void _showDangerWarning() {
+    // ✅ Optional: Visual warning when few moves remain
+    // For now, just print - will add UI effects later
+    print('⚠️ Few moves remaining - plan carefully!');
+  }
+  
+  void _showGameOverScreen() {
+    print('💀 Showing game over screen...');
+    
+    // Get final game data
+    final finalScore = scoring.currentScore;
+    final level = scoring.level;
+    final linesCleared = scoring.linesCleared;
+    final fillPercentage = GameOverManager.getGridFillPercentage(this);
+    
+    // Remove any existing overlays and show game over
+    gameRef.overlays.removeAll(['MainMenu', 'AnimatedSplash']);
+    gameRef.overlays.add('GameOver');
+    gameRef.currentState = GameState.gameOver;
+    
+    print('✅ Game over overlay should now be visible');
+  }
+  
+  // ✅ NEW: Restart game functionality with proper visual cleanup
+  void restartGame() {
+    print('🔄 Restarting game...');
+    
+    // Reset game state
+    _gameOver = false;
+    _gameOverProcessed = false;
+    
+    // ✅ FIX: Remove ONLY placed block components, keep grid lines and UI
+    final componentsToRemove = <Component>[];
+    
+    // Find and remove only the filled block components (placed blocks)
+    for (final child in children) {
+      if (child is BlockComponent) {
+        componentsToRemove.add(child);
+      }
+      // Remove only FILLED RectangleComponent blocks (solid purple ones)
+      if (child is RectangleComponent && 
+          child.size.x == cellSize && 
+          child.size.y == cellSize &&
+          child.paint.color == Colors.deepPurpleAccent) { // ✅ Only remove purple filled blocks
+        componentsToRemove.add(child);
+      }
+    }
+    
+    // Remove all found components
+    for (final component in componentsToRemove) {
+      remove(component);
+    }
+    
+    print('🗑️ Removed ${componentsToRemove.length} block components (kept grid lines)');
+    
+    // Clear all grids
+    for (int row = 0; row < extendedGridSize; row++) {
+      for (int col = 0; col < extendedGridSize; col++) {
+        if (row == 0 || col == 0 || row == extendedGridSize - 1 || col == extendedGridSize - 1) {
+          occupiedGrid[row][col] = true; // Keep boundaries
+        } else {
+          occupiedGrid[row][col] = false;
+        }
+        placedBlocks[row][col] = null;
+        visualGrid[row][col] = null;
+      }
+    }
+    
+    // Clear active blocks list
+    activeBlocks.clear();
+    
+    // Reset scoring
+    scoring.reset();
+    _updateUI();
+    
+    // Spawn new blocks
+    spawnThreeBlocks();
+    
+    print('✅ Game restarted successfully with grid lines preserved');
+  }
+  
+  // ✅ NEW: Public getters for game state
+  bool get isGameOver => _gameOver;
+  double get gridFillPercentage => GameOverManager.getGridFillPercentage(this);
+  Map<String, dynamic> get gameStateInfo => GameOverManager.getGameState(this);
 }

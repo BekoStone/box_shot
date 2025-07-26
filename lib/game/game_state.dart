@@ -3,5 +3,5 @@ enum GameState {
   menu,
   playing,
   paused,
-  gameOver,
+  gameOver, // ✅ NEW: Added game over state
 }
