@@ -2,7 +2,6 @@
 
 import 'package:box_shot/game/game_state.dart';
 import 'package:flame/components.dart';
-import 'package:flame/effects.dart';
 import 'package:flutter/material.dart';
 import '../box_hooks_game.dart';
 import '../factory/shape_factory.dart';

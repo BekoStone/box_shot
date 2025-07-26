@@ -1,5 +1,7 @@
 // File: lib/game/managers/game_over_manager.dart
 
+// ignore_for_file: avoid_print
+
 import '../components/block_component.dart';
 import '../components/game_scene.dart';
 
