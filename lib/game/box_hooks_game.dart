@@ -142,10 +142,16 @@ class BoxHooksGame extends FlameGame with DragCallbacks, TapCallbacks, HasCollis
     print('Share text: $shareText');
   }
 
-  // ✅ NEW: Test undo functionality
+  // ✅ NEW: Test undo functionality - call this manually for now
   void testUndo() {
+    print('🧪 Testing undo...');
     if (_gameScene != null) {
-      _gameScene!.onUndoButtonTapped();
+      final success = _gameScene!.performUndo();
+      if (success) {
+        print('✅ Undo test successful!');
+      } else {
+        print('❌ Undo test failed');
+      }
     }
   }
 
