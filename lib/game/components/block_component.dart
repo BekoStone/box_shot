@@ -6,8 +6,8 @@ import 'game_scene.dart';
 
 class BlockComponent extends PositionComponent
     with HasGameRef<BoxHooksGame>, DragCallbacks {
-  static const double cellSize = 36; // ✅ كان 28
-  static const double spacing = 3;   // ✅ كان 2
+  static const double cellSize = 36;
+  static const double spacing = 3;
 
   final List<List<int>> shape;
   bool isLocked = false;
@@ -57,21 +57,11 @@ class BlockComponent extends PositionComponent
   @override
   void onDragEnd(DragEndEvent event) {
     final scene = gameRef.children.whereType<GameScene>().first;
-    final grid = scene.gridPositions;
 
-    Vector2 closest = grid[0][0];
-    double minDist = double.infinity;
+    // ✅ IMPROVED: Use new precise snap position calculation
+    final snapPosition = scene.getSnapPosition(absolutePosition);
 
-    for (final row in grid) {
-      for (final cell in row) {
-        final dist = absolutePosition.distanceTo(cell);
-        if (dist < minDist) {
-          minDist = dist;
-          closest = cell;
-        }
-      }
-    }
-
+    // Check collision with other active blocks
     for (final other in scene.activeBlocks) {
       if (other != this && toRect().overlaps(other.toRect())) {
         position = originalPosition.clone();
@@ -79,17 +69,21 @@ class BlockComponent extends PositionComponent
       }
     }
 
-    if (!scene.canPlaceBlock(this, closest)) {
+    // Check if block can be placed at snap position
+    if (!scene.canPlaceBlock(this, snapPosition)) {
       position = originalPosition.clone();
       return;
     }
 
-    position = closest - scene.position;
+    // ✅ IMPROVED: Precise positioning relative to scene
+    position = snapPosition - scene.position;
     isLocked = true;
 
-    scene.markBlockOccupied(this, closest);
+    // Mark grid cells as occupied
+    scene.markBlockOccupied(this, snapPosition);
     scene.activeBlocks.remove(this);
 
+    // Spawn new blocks if all are placed
     if (scene.activeBlocks.isEmpty) {
       scene.spawnThreeBlocks();
     }
