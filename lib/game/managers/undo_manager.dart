@@ -2,41 +2,55 @@
 
 // ignore_for_file: avoid_print
 
+import 'package:flame/components.dart';
 import '../components/block_component.dart';
 
-// ✅ RENAMED to avoid conflict with existing GameState enum
+// ✅ IMPROVED: Better state snapshot without component references
 class UndoGameState {
   final List<List<bool>> occupiedGrid;
-  final List<List<BlockComponent?>> placedBlocks;
-  final List<BlockComponent> activeBlocks;
+  final List<List<int>> blockIds; // Store block IDs instead of references
+  final Map<int, List<List<int>>> activeBlockShapes; // Store shapes instead of components
+  final Map<int, Vector2> activeBlockPositions; // Store positions
   final int score;
   final int level;
   final int linesCleared;
   final int comboCount;
   final int streakCount;
+  final int nextBlockId; // Track next available block ID
 
   UndoGameState({
     required this.occupiedGrid,
-    required this.placedBlocks,
-    required this.activeBlocks,
+    required this.blockIds,
+    required this.activeBlockShapes,
+    required this.activeBlockPositions,
     required this.score,
     required this.level,
     required this.linesCleared,
     required this.comboCount,
     required this.streakCount,
+    required this.nextBlockId,
   });
 
-  // ✅ Deep copy to prevent reference issues
+  // ✅ FIXED: Proper deep copy without component references
   UndoGameState copy() {
     return UndoGameState(
       occupiedGrid: occupiedGrid.map((row) => List<bool>.from(row)).toList(),
-      placedBlocks: placedBlocks.map((row) => List<BlockComponent?>.from(row)).toList(),
-      activeBlocks: List<BlockComponent>.from(activeBlocks),
+      blockIds: blockIds.map((row) => List<int>.from(row)).toList(),
+      activeBlockShapes: Map<int, List<List<int>>>.from(
+        activeBlockShapes.map((key, value) => MapEntry(
+          key, 
+          value.map((row) => List<int>.from(row)).toList()
+        ))
+      ),
+      activeBlockPositions: Map<int, Vector2>.from(
+        activeBlockPositions.map((key, value) => MapEntry(key, value.clone()))
+      ),
       score: score,
       level: level,
       linesCleared: linesCleared,
       comboCount: comboCount,
       streakCount: streakCount,
+      nextBlockId: nextBlockId,
     );
   }
 }
@@ -47,15 +61,50 @@ class UndoManager {
   final List<UndoGameState> _undoHistory = [];
   int _undoCount = 0; // Track how many undos used this game
   int _maxUndos = 3; // Default free undos per game
+  int _nextBlockId = 0; // Track unique block IDs
   
   // ✅ Public getters
   int get undoCount => _undoCount;
   int get remainingUndos => _maxUndos - _undoCount;
   bool get canUndo => _undoHistory.isNotEmpty && remainingUndos > 0;
   bool get hasUndoHistory => _undoHistory.isNotEmpty;
+  int get nextBlockId => _nextBlockId++;
 
-  // ✅ Save current game state before a move
-  void saveState(UndoGameState state) {
+  // ✅ IMPROVED: Save state without component references
+  void saveState({
+    required List<List<bool>> occupiedGrid,
+    required List<List<int>> blockIds,
+    required List<BlockComponent> activeBlocks,
+    required int score,
+    required int level,
+    required int linesCleared,
+    required int comboCount,
+    required int streakCount,
+  }) {
+    // Extract active block data without storing components
+    final Map<int, List<List<int>>> activeBlockShapes = {};
+    final Map<int, Vector2> activeBlockPositions = {};
+    
+    for (int i = 0; i < activeBlocks.length; i++) {
+      final block = activeBlocks[i];
+      final blockId = nextBlockId;
+      activeBlockShapes[blockId] = block.shape.map((row) => List<int>.from(row)).toList();
+      activeBlockPositions[blockId] = block.originalPosition.clone();
+    }
+
+    final state = UndoGameState(
+      occupiedGrid: occupiedGrid.map((row) => List<bool>.from(row)).toList(),
+      blockIds: blockIds.map((row) => List<int>.from(row)).toList(),
+      activeBlockShapes: activeBlockShapes,
+      activeBlockPositions: activeBlockPositions,
+      score: score,
+      level: level,
+      linesCleared: linesCleared,
+      comboCount: comboCount,
+      streakCount: streakCount,
+      nextBlockId: _nextBlockId,
+    );
+    
     _undoHistory.add(state.copy());
     
     // Keep only the last N states to prevent memory issues
@@ -91,6 +140,7 @@ class UndoManager {
     _undoHistory.clear();
     _undoCount = 0;
     _maxUndos = 3; // Reset to default free undos
+    _nextBlockId = 0;
     print('🔄 Undo manager reset for new game');
   }
 

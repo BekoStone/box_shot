@@ -22,6 +22,9 @@ class BoxHooksGame extends FlameGame with DragCallbacks, TapCallbacks, HasCollis
     overlays.remove('AnimatedSplash');
     overlays.add('MainMenu');
     currentState = GameState.menu;
+    
+    // ✅ NEW: Play menu music
+    AssetManager.playMusic('music_menu');
   }
 
   void startGame() {
@@ -37,6 +40,10 @@ class BoxHooksGame extends FlameGame with DragCallbacks, TapCallbacks, HasCollis
     _gameScene = GameScene();
     add(_gameScene!);
     currentState = GameState.playing;
+    
+    // ✅ NEW: Play game music
+    AssetManager.stopMusic();
+    AssetManager.playMusic('music_game');
     
     print('✅ Game started with fresh scene');
   }
@@ -107,6 +114,9 @@ class BoxHooksGame extends FlameGame with DragCallbacks, TapCallbacks, HasCollis
     // Update state
     currentState = GameState.playing;
     
+    // ✅ NEW: Play restart sound
+    AssetManager.playSfx('sfx_click');
+    
     print('✅ Game restarted successfully');
   }
 
@@ -125,6 +135,11 @@ class BoxHooksGame extends FlameGame with DragCallbacks, TapCallbacks, HasCollis
     // Show main menu
     overlays.add('MainMenu');
     currentState = GameState.menu;
+    
+    // ✅ NEW: Return to menu music
+    AssetManager.stopMusic();
+    AssetManager.playMusic('music_menu');
+    AssetManager.playSfx('sfx_click');
   }
 
   void shareScore() {
@@ -140,6 +155,9 @@ class BoxHooksGame extends FlameGame with DragCallbacks, TapCallbacks, HasCollis
     // For now, just print the share text
     final shareText = "I just scored $score points in Box Hooks! Can you beat my level $level record? 🎮";
     print('Share text: $shareText');
+    
+    // ✅ NEW: Play share sound
+    AssetManager.playSfx('sfx_click');
   }
 
   // ✅ NEW: Test undo functionality - call this manually for now
@@ -155,16 +173,51 @@ class BoxHooksGame extends FlameGame with DragCallbacks, TapCallbacks, HasCollis
     }
   }
 
-  // ✅ Existing methods (unchanged)
+  // ✅ Existing methods with sound effects
   void claimDailyReward() {
     print('🎁 Daily reward claimed!');
+    AssetManager.playSfx('sfx_reward');
   }
 
   void openShop() {
     print('🛒 Opening shop...');
+    AssetManager.playSfx('sfx_click');
   }
 
   void openSettings() {
     print('⚙️ Opening settings...');
+    AssetManager.playSfx('sfx_click');
+  }
+
+  // ✅ NEW: Game lifecycle management
+  @override
+  void onRemove() {
+    // Stop all audio when game is removed
+    AssetManager.stopMusic();
+    super.onRemove();
+  }
+
+  // ✅ NEW: Pause/Resume handling
+  void pauseGame() {
+    if (currentState == GameState.playing) {
+      currentState = GameState.paused;
+      print('⏸️ Game paused');
+    }
+  }
+
+  void resumeGame() {
+    if (currentState == GameState.paused) {
+      currentState = GameState.playing;
+      print('▶️ Game resumed');
+    }
+  }
+
+  // ✅ NEW: Audio control methods
+  void toggleMusic() {
+    print('🎵 Music toggle requested');
+  }
+
+  void toggleSoundEffects() {
+    print('🔊 SFX toggle requested');
   }
 }

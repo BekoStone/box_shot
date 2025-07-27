@@ -9,8 +9,10 @@ import '../managers/scoring_manager.dart';
 import '../managers/game_over_manager.dart';
 import '../managers/undo_manager.dart';
 import '../game_state.dart';
+import '../../services/asset_manager.dart';
 import 'block_component.dart';
 import 'block_slot_component.dart' as slot;
+import 'undo_button_component.dart';
 
 class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCallbacks {
   static const int gridSize = 8;
@@ -35,7 +37,7 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
   late TextComponent scoreDisplay;
   late TextComponent levelDisplay;
   late TextComponent comboDisplay;
-  late TextComponent undoButton;
+  late UndoButtonComponent undoButtonComponent;
   
   bool _gameOver = false;
   bool _gameOverProcessed = false;
@@ -115,7 +117,7 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
     }
   }
 
-  // ✅ Create UI elements with clearer undo button
+  // ✅ Create UI elements with enhanced undo button
   void _createUI() {
     final screenSize = gameRef.size;
     
@@ -161,27 +163,24 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
     );
     add(comboDisplay);
     
-    // ✅ BIGGER, MORE VISIBLE undo button
-    undoButton = TextComponent(
-      text: '↩️ UNDO (3)',
-      position: Vector2(20, 120),
-      textRenderer: TextPaint(
-        style: const TextStyle(
-          color: Colors.lightGreen, // ✅ Changed to light green - more visible
-          fontSize: 24, // ✅ Made bigger
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+    // ✅ Enhanced undo button component (top-right, below level)
+    undoButtonComponent = UndoButtonComponent(
+      position: Vector2(screenSize.x - 140, 85),
+      onPressed: onUndoButtonTapped,
+      getText: () {
+        final remaining = undoManager.remainingUndos;
+        return remaining > 0 ? '↩️ UNDO ($remaining)' : '↩️ NO UNDO';
+      },
+      isEnabled: () => undoManager.canUndo,
     );
-    add(undoButton);
+    add(undoButtonComponent);
     
-    print('✅ Undo button created: "↩️ UNDO (3)" at (20, 120)');
+    print('✅ Enhanced undo button component added at top-right');
   }
 
   // ✅ Update UI displays
   void _updateUI() {
     final data = scoring.getScoreData();
-    final undoStatus = undoManager.getUndoStatus();
     
     scoreDisplay.text = 'Score: ${data['formattedScore']}';
     levelDisplay.text = 'Level: ${data['level']}';
@@ -195,26 +194,8 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
       comboDisplay.text = '';
     }
     
-    // ✅ Update undo button with better visibility
-    if (undoStatus['canUndo'] as bool) {
-      undoButton.text = '↩️ UNDO (${undoStatus['remainingUndos']})';
-      undoButton.textRenderer = TextPaint(
-        style: const TextStyle(
-          color: Colors.lightGreen,
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    } else {
-      undoButton.text = '↩️ NO UNDO';
-      undoButton.textRenderer = TextPaint(
-        style: const TextStyle(
-          color: Colors.grey,
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    }
+    // ✅ Update undo button appearance
+    undoButtonComponent.updateAppearance();
   }
 
   Vector2 _worldToGrid(Vector2 worldPos) {
@@ -589,9 +570,19 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
   }
   
   void _saveCurrentState() {
-    final currentState = UndoGameState(
+    // Create block IDs grid for undo system
+    final List<List<int>> blockIds = List.generate(
+      extendedGridSize,
+      (row) => List.generate(extendedGridSize, (col) {
+        final block = placedBlocks[row][col];
+        return block?.hashCode ?? -1; // Use hashCode as unique ID
+      }),
+    );
+    
+    // Save state using improved undo manager
+    undoManager.saveState(
       occupiedGrid: occupiedGrid,
-      placedBlocks: placedBlocks,
+      blockIds: blockIds,
       activeBlocks: activeBlocks,
       score: scoring.currentScore,
       level: scoring.level,
@@ -599,8 +590,6 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
       comboCount: scoring.comboCount,
       streakCount: scoring.streakCount,
     );
-    
-    undoManager.saveState(currentState);
   }
   
   bool performUndo() {
@@ -610,14 +599,19 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
       return false;
     }
     
+    print('↩️ Starting undo process...');
+    
+    // Reset game over flags
     _gameOver = false;
     _gameOverProcessed = false;
     
+    // Remove all current block components
     final componentsToRemove = <Component>[];
     for (final child in children) {
       if (child is BlockComponent) {
         componentsToRemove.add(child);
       }
+      // Remove placed block visuals (purple squares)
       if (child is RectangleComponent && 
           child.size.x == cellSize && 
           child.size.y == cellSize &&
@@ -629,16 +623,35 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
     for (final component in componentsToRemove) {
       remove(component);
     }
+    print('🗑️ Removed ${componentsToRemove.length} block components');
     
-    occupiedGrid.clear();
-    occupiedGrid.addAll(previousState.occupiedGrid);
+    // Restore grid state
+    for (int row = 0; row < extendedGridSize; row++) {
+      for (int col = 0; col < extendedGridSize; col++) {
+        occupiedGrid[row][col] = previousState.occupiedGrid[row][col];
+        placedBlocks[row][col] = null; // Clear all references
+      }
+    }
     
-    placedBlocks.clear();
-    placedBlocks.addAll(previousState.placedBlocks);
-    
+    // Clear and recreate active blocks
     activeBlocks.clear();
-    activeBlocks.addAll(previousState.activeBlocks);
     
+    for (final entry in previousState.activeBlockShapes.entries) {
+      final blockId = entry.key;
+      final shape = entry.value;
+      final position = previousState.activeBlockPositions[blockId];
+      
+      if (position != null) {
+        final block = BlockComponent(shape: shape);
+        block.updateOriginalPosition(position);
+        block.isLocked = false;
+        
+        activeBlocks.add(block);
+        add(block);
+      }
+    }
+    
+    // Restore scoring state
     scoring.restoreState(
       previousState.score,
       previousState.level,
@@ -647,22 +660,20 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
       previousState.streakCount,
     );
     
-    _recreateVisualState();
+    // Recreate placed block visuals
+    _recreatePlacedBlockVisuals();
     
+    // Update UI
     _updateUI();
-    print('✅ Undo completed successfully - game state reset');
+    
+    print('✅ Undo completed successfully - ${activeBlocks.length} active blocks restored');
     return true;
   }
   
-  void _recreateVisualState() {
-    for (final block in activeBlocks) {
-      block.isLocked = false;
-      add(block);
-    }
-    
+  void _recreatePlacedBlockVisuals() {
     for (int row = 1; row < extendedGridSize - 1; row++) {
       for (int col = 1; col < extendedGridSize - 1; col++) {
-        if (occupiedGrid[row][col] && placedBlocks[row][col] != null) {
+        if (occupiedGrid[row][col]) {
           final visualBlock = RectangleComponent(
             position: gridPositions[row][col],
             size: Vector2(cellSize, cellSize),
@@ -672,17 +683,29 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
         }
       }
     }
-    
-    print('🔄 Visual state recreated: ${activeBlocks.length} active blocks restored');
+    print('🎨 Recreated placed block visuals');
   }
   
   void onUndoButtonTapped() {
+    print('🔄 Undo button tapped - checking availability...');
+    
     if (undoManager.canUndo) {
-      performUndo();
+      print('✅ Undo available - performing undo...');
+      final success = performUndo();
+      if (success) {
+        print('✅ Undo successful!');
+        // ✅ ADD: Play undo sound effect
+        AssetManager.playSfx('sfx_click');
+      } else {
+        print('❌ Undo failed!');
+        AssetManager.playSfx('sfx_error');
+      }
     } else if (undoManager.remainingUndos == 0) {
+      print('💰 No undos remaining - showing purchase dialog...');
       _showUndoOfferDialog();
     } else {
       print('ℹ️ No moves to undo');
+      AssetManager.playSfx('sfx_error');
     }
   }
   
@@ -690,31 +713,19 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
   double get gridFillPercentage => GameOverManager.getGridFillPercentage(this);
   Map<String, dynamic> get gameStateInfo => GameOverManager.getGameState(this);
   
-  // ✅ BETTER tap detection with larger area
+  // ✅ Remove manual tap detection since button handles its own taps
   @override
   bool onTapUp(TapUpEvent event) {
-    final tapPosition = event.localPosition;
-    
-    // ✅ BIGGER tap area for easier clicking
-    final undoArea = Rect.fromLTWH(
-      undoButton.position.x - 20, // More padding
-      undoButton.position.y - 20, // More padding
-      200, // Much wider
-      60,  // Much taller
-    );
-    
-    if (undoArea.contains(tapPosition.toOffset())) {
-      print('🖱️ UNDO TAPPED! Button works!');
-      onUndoButtonTapped();
-      return true;
-    }
-    
+    // The UndoButtonComponent now handles its own taps
     return false;
   }
   
   void _showUndoOfferDialog() {
-    print('💰 Show undo purchase/ad dialog');
+    print('💰 Showing undo purchase/ad dialog...');
+    // For now, give 3 more free undos (later: implement ads/purchase)
     undoManager.addUndos(3);
     _updateUI();
+    AssetManager.playSfx('sfx_reward');
+    print('🎁 Granted 3 bonus undos!');
   }
 }
