@@ -1,22 +1,22 @@
-// File: lib/game/managers/undo_manager.dart
+// File: lib/game/managers/undo_manager.dart - FIXED VERSION
 
 // ignore_for_file: avoid_print
 
 import 'package:flame/components.dart';
 import '../components/block_component.dart';
 
-// ✅ IMPROVED: Better state snapshot without component references
+// ✅ FIXED: Better state snapshot with improved block identification
 class UndoGameState {
   final List<List<bool>> occupiedGrid;
-  final List<List<int>> blockIds; // Store block IDs instead of references
-  final Map<int, List<List<int>>> activeBlockShapes; // Store shapes instead of components
-  final Map<int, Vector2> activeBlockPositions; // Store positions
+  final List<List<int>> blockIds;
+  final Map<int, List<List<int>>> activeBlockShapes;
+  final Map<int, Vector2> activeBlockPositions;
   final int score;
   final int level;
   final int linesCleared;
   final int comboCount;
   final int streakCount;
-  final int nextBlockId; // Track next available block ID
+  final DateTime timestamp; // ✅ FIXED: Add timestamp for uniqueness
 
   UndoGameState({
     required this.occupiedGrid,
@@ -28,10 +28,10 @@ class UndoGameState {
     required this.linesCleared,
     required this.comboCount,
     required this.streakCount,
-    required this.nextBlockId,
+    required this.timestamp,
   });
 
-  // ✅ FIXED: Proper deep copy without component references
+  // ✅ FIXED: Proper deep copy with timestamp preservation
   UndoGameState copy() {
     return UndoGameState(
       occupiedGrid: occupiedGrid.map((row) => List<bool>.from(row)).toList(),
@@ -50,27 +50,33 @@ class UndoGameState {
       linesCleared: linesCleared,
       comboCount: comboCount,
       streakCount: streakCount,
-      nextBlockId: nextBlockId,
+      timestamp: timestamp, // Preserve original timestamp
     );
   }
 }
 
 class UndoManager {
-  static const int maxUndoStates = 5; // Keep last 5 moves
+  static const int maxUndoStates = 5;
   
   final List<UndoGameState> _undoHistory = [];
-  int _undoCount = 0; // Track how many undos used this game
-  int _maxUndos = 3; // Default free undos per game
-  int _nextBlockId = 0; // Track unique block IDs
+  int _undoCount = 0;
+  int _maxUndos = 3;
+  int _nextBlockId = 1000; // ✅ FIXED: Start with a high number to avoid conflicts
   
-  // ✅ Public getters
   int get undoCount => _undoCount;
   int get remainingUndos => _maxUndos - _undoCount;
   bool get canUndo => _undoHistory.isNotEmpty && remainingUndos > 0;
   bool get hasUndoHistory => _undoHistory.isNotEmpty;
-  int get nextBlockId => _nextBlockId++;
+  
+  // ✅ FIXED: Better unique ID generation using timestamp + counter
+  int get nextBlockId {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final uniqueId = timestamp + _nextBlockId;
+    _nextBlockId++;
+    return uniqueId;
+  }
 
-  // ✅ IMPROVED: Save state without component references
+  // ✅ FIXED: Improved state saving with better block identification
   void saveState({
     required List<List<bool>> occupiedGrid,
     required List<List<int>> blockIds,
@@ -81,13 +87,14 @@ class UndoManager {
     required int comboCount,
     required int streakCount,
   }) {
-    // Extract active block data without storing components
+    // ✅ FIXED: Create stable block IDs based on position and shape
     final Map<int, List<List<int>>> activeBlockShapes = {};
     final Map<int, Vector2> activeBlockPositions = {};
     
     for (int i = 0; i < activeBlocks.length; i++) {
       final block = activeBlocks[i];
-      final blockId = nextBlockId;
+      // ✅ FIXED: Use deterministic ID based on block index and current state
+      final blockId = _generateStableBlockId(block, i);
       activeBlockShapes[blockId] = block.shape.map((row) => List<int>.from(row)).toList();
       activeBlockPositions[blockId] = block.originalPosition.clone();
     }
@@ -102,7 +109,7 @@ class UndoManager {
       linesCleared: linesCleared,
       comboCount: comboCount,
       streakCount: streakCount,
-      nextBlockId: _nextBlockId,
+      timestamp: DateTime.now(), // ✅ FIXED: Add timestamp
     );
     
     _undoHistory.add(state.copy());
@@ -113,9 +120,29 @@ class UndoManager {
     }
     
     print('💾 Game state saved (${_undoHistory.length} states in history)');
+    print('📊 State timestamp: ${state.timestamp.millisecondsSinceEpoch}');
   }
 
-  // ✅ Undo the last move
+  // ✅ FIXED: Generate stable block IDs based on content and position
+  int _generateStableBlockId(BlockComponent block, int index) {
+    // Create a hash based on shape, position, and index
+    int hash = index * 10000;
+    
+    // Add shape hash
+    for (int row = 0; row < block.shape.length; row++) {
+      for (int col = 0; col < block.shape[row].length; col++) {
+        if (block.shape[row][col] == 1) {
+          hash += (row * 100 + col * 10 + 1);
+        }
+      }
+    }
+    
+    // Add position hash (rounded to avoid floating point issues)
+    hash += (block.originalPosition.x.round() + block.originalPosition.y.round() * 1000);
+    
+    return hash.abs(); // Ensure positive ID
+  }
+
   UndoGameState? performUndo() {
     if (!canUndo) {
       print('❌ Cannot undo: ${remainingUndos == 0 ? "No undos remaining" : "No history"}');
@@ -126,31 +153,28 @@ class UndoManager {
     _undoCount++;
     
     print('↩️ Undo performed! (${remainingUndos} undos remaining)');
+    print('📊 Restored state from: ${previousState.timestamp.millisecondsSinceEpoch}');
     return previousState;
   }
 
-  // ✅ Add extra undos via purchase/ads
   void addUndos(int count) {
     _maxUndos += count;
-    print('🎁 Added $count undos! Total available: ${remainingUndos}');
+    print('🎁 Added $count undos! Total available: $remainingUndos');
   }
 
-  // ✅ Reset for new game
   void resetForNewGame() {
     _undoHistory.clear();
     _undoCount = 0;
-    _maxUndos = 3; // Reset to default free undos
-    _nextBlockId = 0;
+    _maxUndos = 3;
+    _nextBlockId = 1000; // ✅ FIXED: Reset to safe starting value
     print('🔄 Undo manager reset for new game');
   }
 
-  // ✅ Premium/subscription: unlimited undos
   void enableUnlimitedUndos() {
-    _maxUndos = 999999; // Effectively unlimited
+    _maxUndos = 999999;
     print('👑 Unlimited undos enabled!');
   }
 
-  // ✅ Get undo status for UI
   Map<String, dynamic> getUndoStatus() {
     return {
       'canUndo': canUndo,
@@ -158,15 +182,21 @@ class UndoManager {
       'totalUsed': _undoCount,
       'hasHistory': hasUndoHistory,
       'maxUndos': _maxUndos == 999999 ? 'Unlimited' : _maxUndos.toString(),
+      'historySize': _undoHistory.length,
     };
   }
 
-  // ✅ Debug method
   void printStatus() {
     print('🔄 UNDO STATUS:');
     print('   History: ${_undoHistory.length} states');
     print('   Used: $_undoCount/$_maxUndos');
     print('   Can Undo: $canUndo');
     print('   Remaining: $remainingUndos');
+    print('   Next Block ID: $_nextBlockId');
+    
+    // ✅ FIXED: Print state timestamps for debugging
+    if (_undoHistory.isNotEmpty) {
+      print('   Last saved: ${_undoHistory.last.timestamp.millisecondsSinceEpoch}');
+    }
   }
 }

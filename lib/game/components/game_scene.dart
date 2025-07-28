@@ -1,3 +1,5 @@
+// File: lib/game/components/game_scene.dart - COMPLETE REPLACEMENT
+
 // ignore_for_file: avoid_print
 
 import 'package:flame/components.dart';
@@ -8,6 +10,9 @@ import '../factory/shape_factory.dart';
 import '../managers/scoring_manager.dart';
 import '../managers/game_over_manager.dart';
 import '../managers/undo_manager.dart';
+import '../managers/power_up_manager.dart';  // ✅ NEW
+import '../managers/coin_manager.dart';      // ✅ NEW  
+import '../managers/achievement_manager.dart'; // ✅ NEW
 import '../game_state.dart';
 import '../../services/asset_manager.dart';
 import 'block_component.dart';
@@ -19,25 +24,41 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
   static const double cellSize = 36;
   static const double spacing = 3;
   static const int extendedGridSize = gridSize + 2;
+  static const double _precisionTolerance = 0.1;
 
-  // ✅ Make grid properties accessible for GameOverManager
+  // ✅ FIXED: Make all grid properties public for power-up access
   late List<List<Vector2>> gridPositions;
   late List<List<bool>> occupiedGrid;
   late List<List<Component?>> visualGrid;
   late List<List<BlockComponent?>> placedBlocks;
   
-  // ✅ Grid calculation properties for precise mapping
   late double _gridStartX;
   late double _gridStartY;
   late double _cellStep;
 
-  // ✅ NEW: Scoring system, game state, and undo system
+  // ✅ Core systems
   final ScoringManager scoring = ScoringManager();
   final UndoManager undoManager = UndoManager();
+  
+  // ✅ NEW: Enhancement managers  
+  final PowerUpManager powerUpManager = PowerUpManager();
+  final CoinManager coinManager = CoinManager();
+  final AchievementManager achievementManager = AchievementManager();
+  
+  // ✅ NEW: Game tracking
+  bool _usedUndoThisGame = false;
+  int _blocksPlacedThisGame = 0;
+  int _coinsEarnedThisGame = 0;
+  DateTime? _gameStartTime;
+
+  // UI components
   late TextComponent scoreDisplay;
   late TextComponent levelDisplay;
   late TextComponent comboDisplay;
+  late TextComponent coinDisplay; // ✅ NEW
   late UndoButtonComponent undoButtonComponent;
+  late RectangleComponent powerUpButton; // ✅ NEW
+  late TextComponent powerUpButtonText; // ✅ NEW
   
   bool _gameOver = false;
   bool _gameOverProcessed = false;
@@ -45,19 +66,24 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
   final List<BlockComponent> activeBlocks = [];
   final List<slot.BlockSlotComponent> slots = [];
   
-  // ✅ NEW: Getters for external access
   List<BlockComponent> get activeBlocksList => activeBlocks;
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
     
-    // Calculate grid parameters
+    // ✅ FIXED: Initialize enhancement systems first
+    await coinManager.initialize();
+    await achievementManager.initialize();
+    
+    _gameStartTime = DateTime.now();
+    _coinsEarnedThisGame = 0;
+    
     _cellStep = cellSize + spacing;
     final screenSize = gameRef.size;
     final totalSize = (cellSize * gridSize) + (spacing * (gridSize - 1));
-    _gridStartX = (screenSize.x - totalSize) / 2 - _cellStep;
-    _gridStartY = (screenSize.y - totalSize) / 2 - _cellStep;
+    _gridStartX = ((screenSize.x - totalSize) / 2).roundToDouble() - _cellStep;
+    _gridStartY = ((screenSize.y - totalSize) / 2).roundToDouble() - _cellStep;
 
     _initializeGrids();
     _createGridVisuals();
@@ -67,35 +93,16 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
   }
 
   void _initializeGrids() {
-    gridPositions = List.generate(
-      extendedGridSize,
-      (_) => List.filled(extendedGridSize, Vector2.zero()),
-    );
+    gridPositions = List.generate(extendedGridSize, (_) => List.filled(extendedGridSize, Vector2.zero()));
+    occupiedGrid = List.generate(extendedGridSize, (r) => List.generate(extendedGridSize, (c) => r == 0 || c == 0 || r == extendedGridSize - 1 || c == extendedGridSize - 1));
+    placedBlocks = List.generate(extendedGridSize, (_) => List.filled(extendedGridSize, null));
+    visualGrid = List.generate(extendedGridSize, (_) => List.filled(extendedGridSize, null));
 
-    occupiedGrid = List.generate(
-      extendedGridSize,
-      (r) => List.generate(
-        extendedGridSize,
-        (c) => r == 0 || c == 0 || r == extendedGridSize - 1 || c == extendedGridSize - 1,
-      ),
-    );
-
-    placedBlocks = List.generate(
-      extendedGridSize,
-      (_) => List.filled(extendedGridSize, null),
-    );
-
-    visualGrid = List.generate(
-      extendedGridSize,
-      (_) => List.filled(extendedGridSize, null),
-    );
-
-    // Fill grid positions
     for (int row = 0; row < extendedGridSize; row++) {
       for (int col = 0; col < extendedGridSize; col++) {
         gridPositions[row][col] = Vector2(
-          _gridStartX + col * _cellStep,
-          _gridStartY + row * _cellStep,
+          (_gridStartX + col * _cellStep).roundToDouble(),
+          (_gridStartY + row * _cellStep).roundToDouble(),
         );
       }
     }
@@ -107,63 +114,61 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
         final cell = RectangleComponent(
           position: gridPositions[row][col],
           size: Vector2(cellSize, cellSize),
-          paint: Paint()
-            ..color = Colors.grey.shade600
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5,
+          paint: Paint()..color = Colors.grey.shade600..style = PaintingStyle.stroke..strokeWidth = 1.5,
         );
         add(cell);
       }
     }
   }
 
-  // ✅ Create UI elements with enhanced undo button
   void _createUI() {
     final screenSize = gameRef.size;
     
-    // Score display
     scoreDisplay = TextComponent(
       text: 'Score: 0',
       position: Vector2(20, 50),
-      textRenderer: TextPaint(
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+      textRenderer: TextPaint(style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
     );
     add(scoreDisplay);
     
-    // Level display
     levelDisplay = TextComponent(
       text: 'Level: 1',
       position: Vector2(screenSize.x - 120, 50),
-      textRenderer: TextPaint(
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+      textRenderer: TextPaint(style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
     );
     add(levelDisplay);
     
-    // Combo display
     comboDisplay = TextComponent(
       text: '',
       position: Vector2(screenSize.x / 2 - 50, 100),
-      textRenderer: TextPaint(
-        style: const TextStyle(
-          color: Colors.orangeAccent,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
+      textRenderer: TextPaint(style: const TextStyle(color: Colors.orangeAccent, fontSize: 18, fontWeight: FontWeight.bold)),
     );
     add(comboDisplay);
+
+    // ✅ NEW: Coin display
+    coinDisplay = TextComponent(
+      text: '💰 ${coinManager.currentCoins}',
+      position: Vector2(20, 200),
+      textRenderer: TextPaint(style: const TextStyle(color: Colors.amber, fontSize: 18, fontWeight: FontWeight.bold)),
+    );
+    add(coinDisplay);
+
+    // ✅ NEW: Power-up button
+    powerUpButton = RectangleComponent(
+      position: Vector2(20, 150),
+      size: Vector2(120, 35),
+      paint: Paint()..color = Colors.purple.withOpacity(0.8)..style = PaintingStyle.fill,
+    );
+    add(powerUpButton);
     
-    // ✅ Enhanced undo button component (top-right, below level)
+    powerUpButtonText = TextComponent(
+      text: '🔥 POWER-UPS',
+      position: Vector2(80, 167),
+      anchor: Anchor.center,
+      textRenderer: TextPaint(style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+    );
+    add(powerUpButtonText);
+    
     undoButtonComponent = UndoButtonComponent(
       position: Vector2(screenSize.x - 140, 85),
       onPressed: onUndoButtonTapped,
@@ -174,14 +179,10 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
       isEnabled: () => undoManager.canUndo,
     );
     add(undoButtonComponent);
-    
-    print('✅ Enhanced undo button component added at top-right');
   }
 
-  // ✅ Update UI displays
   void _updateUI() {
     final data = scoring.getScoreData();
-    
     scoreDisplay.text = 'Score: ${data['formattedScore']}';
     levelDisplay.text = 'Level: ${data['level']}';
     
@@ -193,36 +194,31 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
     } else {
       comboDisplay.text = '';
     }
+
+    // ✅ NEW: Update coin display
+    coinDisplay.text = '💰 ${coinManager.currentCoins}';
     
-    // ✅ Update undo button appearance
     undoButtonComponent.updateAppearance();
   }
 
-  Vector2 _worldToGrid(Vector2 worldPos) {
+  // ✅ FIXED: Make these methods public for power-up access
+  Vector2 worldToGrid(Vector2 worldPos) {
     final relativeX = worldPos.x - _gridStartX;
     final relativeY = worldPos.y - _gridStartY;
-    
-    final col = (relativeX / _cellStep).round();
-    final row = (relativeY / _cellStep).round();
-    
+    final col = (relativeX / _cellStep + 0.5).floor();
+    final row = (relativeY / _cellStep + 0.5).floor();
     return Vector2(col.toDouble(), row.toDouble());
   }
 
-  bool _isValidGridPos(int row, int col) {
-    return row > 0 && col > 0 && 
-           row < extendedGridSize - 1 && 
-           col < extendedGridSize - 1;
+  bool isValidGridPos(int row, int col) {
+    return row > 0 && col > 0 && row < extendedGridSize - 1 && col < extendedGridSize - 1;
   }
 
   Vector2 getSnapPosition(Vector2 worldPos) {
-    final gridCoord = _worldToGrid(worldPos);
-    final row = gridCoord.y.toInt();
-    final col = gridCoord.x.toInt();
-    
-    final clampedRow = row.clamp(1, extendedGridSize - 2);
-    final clampedCol = col.clamp(1, extendedGridSize - 2);
-    
-    return gridPositions[clampedRow][clampedCol];
+    final gridCoord = worldToGrid(worldPos);
+    final row = gridCoord.y.toInt().clamp(1, extendedGridSize - 2);
+    final col = gridCoord.x.toInt().clamp(1, extendedGridSize - 2);
+    return gridPositions[row][col];
   }
 
   void _createSlots() {
@@ -234,8 +230,7 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
 
     for (int i = 0; i < 3; i++) {
       final x = startX + i * (slot.BlockSlotComponent.slotWidth + slotSpacing);
-      final slotComponent = slot.BlockSlotComponent(index: i)
-        ..position = Vector2(x, centerY);
+      final slotComponent = slot.BlockSlotComponent(index: i)..position = Vector2(x, centerY);
       slots.add(slotComponent);
       add(slotComponent);
     }
@@ -250,20 +245,17 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
       final slotComponent = slots[i];
 
       block.position = slotComponent.position.clone() +
-          Vector2(
-            (slot.BlockSlotComponent.slotWidth - block.size.x) / 2,
-            (slot.BlockSlotComponent.slotHeight - block.size.y) / 2,
-          );
+          Vector2((slot.BlockSlotComponent.slotWidth - block.size.x) / 2, (slot.BlockSlotComponent.slotHeight - block.size.y) / 2);
 
       activeBlocks.add(block);
       add(block);
     }
     
-    _checkGameOver();
+    Future.microtask(() => _checkGameOver());
   }
 
   bool canPlaceBlock(BlockComponent block, Vector2 snapPosition) {
-    final gridCoord = _worldToGrid(snapPosition);
+    final gridCoord = worldToGrid(snapPosition);
     final baseRow = gridCoord.y.toInt();
     final baseCol = gridCoord.x.toInt();
 
@@ -274,25 +266,29 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
         final gridRow = baseRow + shapeRow;
         final gridCol = baseCol + shapeCol;
 
-        if (!_isValidGridPos(gridRow, gridCol)) {
-          return false;
-        }
-
-        if (occupiedGrid[gridRow][gridCol]) {
-          return false;
-        }
+        if (!isValidGridPos(gridRow, gridCol)) return false;
+        if (occupiedGrid[gridRow][gridCol]) return false;
       }
     }
-
     return true;
   }
 
+  // ✅ ENHANCED: markBlockOccupied with power-up and achievement integration
   void markBlockOccupied(BlockComponent block, Vector2 snapPosition) {
     if (_gameOver) return;
     
+    // ✅ FIXED: Check for power-up usage first
+    if (powerUpManager.isWaitingForTarget) {
+      final success = powerUpManager.usePowerUpAt(this, snapPosition);
+      if (success) {
+        _updateUI(); // Update UI after power-up use
+        return; // Power-up was used, don't place block
+      }
+    }
+    
     _saveCurrentState();
     
-    final gridCoord = _worldToGrid(snapPosition);
+    final gridCoord = worldToGrid(snapPosition);
     final baseRow = gridCoord.y.toInt();
     final baseCol = gridCoord.x.toInt();
     
@@ -305,7 +301,7 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
         final gridRow = baseRow + shapeRow;
         final gridCol = baseCol + shapeCol;
 
-        if (_isValidGridPos(gridRow, gridCol)) {
+        if (isValidGridPos(gridRow, gridCol)) {
           occupiedGrid[gridRow][gridCol] = true;
           placedBlocks[gridRow][gridCol] = block;
           cellsPlaced++;
@@ -313,11 +309,18 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
       }
     }
 
+    // ✅ ENHANCED: Award coins and track achievements
+    _blocksPlacedThisGame++;
+    final blockCoins = cellsPlaced;
+    coinManager.awardCoins('block_placed', customAmount: blockCoins);
+    _coinsEarnedThisGame += blockCoins;
+    achievementManager.onBlockPlaced();
+
     scoring.awardBlockPlacement(cellsPlaced);
     _updateUI();
 
     checkForCompletedLines();
-    _checkGameOver();
+    Future.microtask(() => _checkGameOver());
   }
 
   void checkForCompletedLines() {
@@ -332,9 +335,7 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
           break;
         }
       }
-      if (isRowComplete) {
-        completedRows.add(row);
-      }
+      if (isRowComplete) completedRows.add(row);
     }
 
     for (int col = 1; col < extendedGridSize - 1; col++) {
@@ -345,9 +346,7 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
           break;
         }
       }
-      if (isColComplete) {
-        completedCols.add(col);
-      }
+      if (isColComplete) completedCols.add(col);
     }
 
     if (completedRows.isNotEmpty || completedCols.isNotEmpty) {
@@ -358,7 +357,46 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
     }
   }
 
+  // ✅ ENHANCED: clearLines with coin and achievement integration
   void clearLines(List<int> rows, List<int> cols) {
+    if (rows.isEmpty && cols.isEmpty) {
+      scoring.resetCombo();
+      _updateUI();
+      return;
+    }
+
+    // Award coins for line clearing
+    final totalLines = rows.length + cols.length;
+    final lineCoins = totalLines * 10;
+    coinManager.awardCoins('line_cleared', customAmount: lineCoins);
+    _coinsEarnedThisGame += lineCoins;
+    
+    // Award combo bonuses
+    if (scoring.comboCount > 1) {
+      final comboCoins = scoring.comboCount * 10;
+      coinManager.awardCoins('combo_bonus', customAmount: comboCoins);
+      _coinsEarnedThisGame += comboCoins;
+    }
+    
+    // Track achievements
+    achievementManager.onLineCleared(totalLines);
+    achievementManager.onComboAchieved(scoring.comboCount);
+    achievementManager.onScoreAchieved(scoring.currentScore);
+    
+    // Check for perfect clear
+    final isPerfectClear = _checkPerfectClear();
+    if (isPerfectClear) {
+      final perfectCoins = 100;
+      coinManager.awardCoins('perfect_clear', customAmount: perfectCoins);
+      _coinsEarnedThisGame += perfectCoins;
+      achievementManager.onPerfectClear();
+    }
+
+    // Perform the actual line clearing
+    _performLineClear(rows, cols);
+  }
+
+  void _performLineClear(List<int> rows, List<int> cols) {
     Set<Vector2> cellsToRemove = {};
     Map<BlockComponent, Set<Vector2>> affectedBlocks = {};
 
@@ -420,9 +458,7 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
   bool _checkPerfectClear() {
     for (int row = 1; row < extendedGridSize - 1; row++) {
       for (int col = 1; col < extendedGridSize - 1; col++) {
-        if (occupiedGrid[row][col]) {
-          return false;
-        }
+        if (occupiedGrid[row][col]) return false;
       }
     }
     return true;
@@ -435,7 +471,6 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
       for (int col = 1; col < extendedGridSize - 1; col++) {
         if (placedBlocks[row][col] == block) {
           final cellPos = Vector2(col.toDouble(), row.toDouble());
-          
           if (!clearedCells.contains(cellPos)) {
             remainingCells.add(cellPos);
           }
@@ -465,33 +500,61 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
   void _checkGameOver() {
     if (_gameOver || _gameOverProcessed) return;
     
-    final isGameOver = GameOverManager.isGameOver(this);
+    print('🔍 Checking game over state...');
     
-    if (isGameOver) {
+    if (activeBlocks.isEmpty) {
+      print('✅ No active blocks - game continues');
+      return;
+    }
+    
+    bool canPlaceAnyBlock = false;
+    
+    for (int blockIndex = 0; blockIndex < activeBlocks.length; blockIndex++) {
+      final block = activeBlocks[blockIndex];
+      
+      for (int testRow = 1; testRow < extendedGridSize - 1; testRow++) {
+        for (int testCol = 1; testCol < extendedGridSize - 1; testCol++) {
+          final testPosition = gridPositions[testRow][testCol];
+          
+          if (canPlaceBlock(block, testPosition)) {
+            canPlaceAnyBlock = true;
+            break;
+          }
+        }
+        if (canPlaceAnyBlock) break;
+      }
+      if (canPlaceAnyBlock) break;
+    }
+    
+    if (!canPlaceAnyBlock) {
+      print('💀 GAME OVER - No valid moves remaining');
       _gameOver = true;
       _handleGameOver();
-    } else {
-      final isInDanger = GameOverManager.isGameInDanger(this);
-      if (isInDanger) {
-        print('⚠️ WARNING: Very few moves remaining!');
-        _showDangerWarning();
-      }
     }
   }
   
+  // ✅ ENHANCED: _handleGameOver with all tracking
   void _handleGameOver() {
     if (_gameOverProcessed) return;
     _gameOverProcessed = true;
     
     print('🎮 GAME OVER!');
     
-    GameOverManager.printGameAnalysis(this);
+    // Calculate game duration
+    final gameDuration = _gameStartTime != null 
+        ? DateTime.now().difference(_gameStartTime!).inSeconds 
+        : 0;
     
-    final finalScore = scoring.currentScore;
-    final level = scoring.level;
+    // Award completion coins
+    final completionCoins = 25;
+    coinManager.awardCoins('game_complete', customAmount: completionCoins);
+    _coinsEarnedThisGame += completionCoins;
     
-    print('🏆 Final Score: $finalScore');
-    print('📊 Final Level: $level');
+    // Track final achievements
+    achievementManager.onGameCompleted(!_usedUndoThisGame);
+    achievementManager.onLevelReached(scoring.level);
+    achievementManager.onGameDuration(gameDuration);
+    achievementManager.onScoreAchieved(scoring.currentScore);
     
     for (final block in activeBlocks) {
       block.isLocked = true;
@@ -500,23 +563,22 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
     _showGameOverScreen();
   }
   
-  void _showDangerWarning() {
-    print('⚠️ Few moves remaining - plan carefully!');
-  }
-  
   void _showGameOverScreen() {
     print('💀 Showing game over screen...');
     
-    final finalScore = scoring.currentScore;
-    final level = scoring.level;
-    final linesCleared = scoring.linesCleared;
-    final fillPercentage = GameOverManager.getGridFillPercentage(this);
+    final unlockedAchievements = achievementManager.getRecentlyUnlocked();
+    
+    // Grant achievement rewards
+    for (final achievementId in unlockedAchievements) {
+      achievementManager.grantRewards(achievementId, coinManager, powerUpManager);
+    }
     
     gameRef.overlays.removeAll(['MainMenu', 'AnimatedSplash']);
     gameRef.overlays.add('GameOver');
     gameRef.currentState = GameState.gameOver;
     
-    print('✅ Game over overlay should now be visible');
+    print('✅ Game over overlay visible');
+    print('💰 Coins earned this game: $_coinsEarnedThisGame');
   }
   
   void restartGame() {
@@ -524,6 +586,10 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
     
     _gameOver = false;
     _gameOverProcessed = false;
+    _usedUndoThisGame = false;
+    _blocksPlacedThisGame = 0;
+    _coinsEarnedThisGame = 0;
+    _gameStartTime = DateTime.now();
     
     undoManager.resetForNewGame();
     
@@ -545,8 +611,6 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
       remove(component);
     }
     
-    print('🗑️ Removed ${componentsToRemove.length} block components (kept grid lines)');
-    
     for (int row = 0; row < extendedGridSize; row++) {
       for (int col = 0; col < extendedGridSize; col++) {
         if (row == 0 || col == 0 || row == extendedGridSize - 1 || col == extendedGridSize - 1) {
@@ -560,26 +624,20 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
     }
     
     activeBlocks.clear();
-    
     scoring.reset();
     _updateUI();
-    
     spawnThreeBlocks();
-    
-    print('✅ Game restarted successfully with grid lines preserved');
   }
   
   void _saveCurrentState() {
-    // Create block IDs grid for undo system
     final List<List<int>> blockIds = List.generate(
       extendedGridSize,
       (row) => List.generate(extendedGridSize, (col) {
         final block = placedBlocks[row][col];
-        return block?.hashCode ?? -1; // Use hashCode as unique ID
+        return block?.hashCode ?? -1;
       }),
     );
     
-    // Save state using improved undo manager
     undoManager.saveState(
       occupiedGrid: occupiedGrid,
       blockIds: blockIds,
@@ -594,24 +652,18 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
   
   bool performUndo() {
     final previousState = undoManager.performUndo();
-    if (previousState == null) {
-      print('❌ Cannot perform undo');
-      return false;
-    }
+    if (previousState == null) return false;
     
-    print('↩️ Starting undo process...');
+    _usedUndoThisGame = true;
     
-    // Reset game over flags
     _gameOver = false;
     _gameOverProcessed = false;
     
-    // Remove all current block components
     final componentsToRemove = <Component>[];
     for (final child in children) {
       if (child is BlockComponent) {
         componentsToRemove.add(child);
       }
-      // Remove placed block visuals (purple squares)
       if (child is RectangleComponent && 
           child.size.x == cellSize && 
           child.size.y == cellSize &&
@@ -623,17 +675,14 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
     for (final component in componentsToRemove) {
       remove(component);
     }
-    print('🗑️ Removed ${componentsToRemove.length} block components');
     
-    // Restore grid state
     for (int row = 0; row < extendedGridSize; row++) {
       for (int col = 0; col < extendedGridSize; col++) {
         occupiedGrid[row][col] = previousState.occupiedGrid[row][col];
-        placedBlocks[row][col] = null; // Clear all references
+        placedBlocks[row][col] = null;
       }
     }
     
-    // Clear and recreate active blocks
     activeBlocks.clear();
     
     for (final entry in previousState.activeBlockShapes.entries) {
@@ -651,7 +700,6 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
       }
     }
     
-    // Restore scoring state
     scoring.restoreState(
       previousState.score,
       previousState.level,
@@ -660,13 +708,9 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
       previousState.streakCount,
     );
     
-    // Recreate placed block visuals
     _recreatePlacedBlockVisuals();
-    
-    // Update UI
     _updateUI();
     
-    print('✅ Undo completed successfully - ${activeBlocks.length} active blocks restored');
     return true;
   }
   
@@ -683,49 +727,111 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
         }
       }
     }
-    print('🎨 Recreated placed block visuals');
   }
   
   void onUndoButtonTapped() {
-    print('🔄 Undo button tapped - checking availability...');
-    
     if (undoManager.canUndo) {
-      print('✅ Undo available - performing undo...');
       final success = performUndo();
       if (success) {
-        print('✅ Undo successful!');
-        // ✅ ADD: Play undo sound effect
         AssetManager.playSfx('sfx_click');
       } else {
-        print('❌ Undo failed!');
         AssetManager.playSfx('sfx_error');
       }
     } else if (undoManager.remainingUndos == 0) {
-      print('💰 No undos remaining - showing purchase dialog...');
       _showUndoOfferDialog();
     } else {
-      print('ℹ️ No moves to undo');
       AssetManager.playSfx('sfx_error');
     }
   }
   
   bool get isGameOver => _gameOver;
   double get gridFillPercentage => GameOverManager.getGridFillPercentage(this);
-  Map<String, dynamic> get gameStateInfo => GameOverManager.getGameState(this);
   
-  // ✅ Remove manual tap detection since button handles its own taps
+  // ✅ NEW: Enhanced tap handling for power-ups AND power-up button
   @override
   bool onTapUp(TapUpEvent event) {
-    // The UndoButtonComponent now handles its own taps
+    // Check power-up button tap
+    final powerUpButtonRect = Rect.fromLTWH(20, 150, 120, 35);
+    if (powerUpButtonRect.contains(event.localPosition.toOffset())) {
+      _showPowerUpMenu();
+      return true;
+    }
+
+    // Check if we're waiting for power-up target
+    if (powerUpManager.isWaitingForTarget) {
+      final success = powerUpManager.usePowerUpAt(this, event.localPosition);
+      if (success) {
+        print('✅ Power-up used successfully');
+        gameRef.overlays.remove('PowerUpMenu');
+        _updateUI();
+        return true;
+      } else {
+        print('❌ Invalid power-up target');
+        return true;
+      }
+    }
+    
     return false;
   }
   
+  // ✅ NEW: Show power-up menu
+  void _showPowerUpMenu() {
+    print('🔥 Opening power-up menu');
+    gameRef.overlays.add('PowerUpMenu');
+  }
+
   void _showUndoOfferDialog() {
-    print('💰 Showing undo purchase/ad dialog...');
-    // For now, give 3 more free undos (later: implement ads/purchase)
     undoManager.addUndos(3);
     _updateUI();
     AssetManager.playSfx('sfx_reward');
     print('🎁 Granted 3 bonus undos!');
+  }
+
+  // ✅ NEW: Public power-up methods
+  void activatePowerUp(PowerUpType type) {
+    powerUpManager.activatePowerUp(type);
+  }
+
+  void cancelPowerUp() {
+    powerUpManager.cancelActivePowerUp();
+  }
+
+  bool hasPowerUp(PowerUpType type) {
+    return powerUpManager.hasPowerUp(type);
+  }
+
+  // ✅ NEW: Public coin methods
+  int getCurrentCoins() {
+    return coinManager.currentCoins;
+  }
+
+  bool purchasePowerUp(PowerUpType type) {
+    return coinManager.purchasePowerUp(type, powerUpManager);
+  }
+
+  int getCoinsEarnedThisGame() {
+    return _coinsEarnedThisGame;
+  }
+
+  // ✅ NEW: Public achievement methods
+  List<Achievement> getUnlockedAchievements() {
+    return achievementManager.getUnlockedAchievements();
+  }
+
+  double getAchievementProgress() {
+    return achievementManager.getCompletionPercentage();
+  }
+
+  List<String> getRecentlyUnlockedAchievements() {
+    return achievementManager.getRecentlyUnlocked();
+  }
+
+  // ✅ NEW: Power-up inventory access
+  Map<PowerUpType, int> getPowerUpInventory() {
+    return powerUpManager.inventory;
+  }
+
+  void hidePowerUpMenu() {
+    gameRef.overlays.remove('PowerUpMenu');
   }
 }

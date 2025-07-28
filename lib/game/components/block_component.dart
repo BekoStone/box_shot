@@ -1,3 +1,5 @@
+// File: lib/game/components/block_component.dart - FIXED VERSION
+
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +16,9 @@ class BlockComponent extends PositionComponent
   bool isLocked = false;
   late Vector2 originalPosition;
   bool _isDragging = false;
+
+  // ✅ FIXED: Better collision detection with improved precision
+  static const double _collisionTolerance = 1.0;
 
   BlockComponent({required this.shape}) {
     final width = shape[0].length;
@@ -56,7 +61,6 @@ class BlockComponent extends PositionComponent
     _isDragging = true;
     priority = 10; // Bring to front while dragging
     
-    // ✅ NEW: Play pickup sound effect
     AssetManager.playSfx('sfx_click');
     
     super.onDragStart(event);
@@ -76,41 +80,44 @@ class BlockComponent extends PositionComponent
     _isDragging = false;
     priority = 1; // Return to normal priority
     
-    final scene = gameRef.children.whereType<GameScene>().first;
+    // ✅ FIXED: Safe scene access
+    final scenes = gameRef.children.whereType<GameScene>();
+    if (scenes.isEmpty) {
+      position = originalPosition.clone();
+      AssetManager.playSfx('sfx_error');
+      return;
+    }
+    
+    final scene = scenes.first;
 
-    // ✅ IMPROVED: Use new precise snap position calculation
+    // Get precise snap position
     final snapPosition = scene.getSnapPosition(absolutePosition);
 
-    // Check collision with other active blocks
-    for (final other in scene.activeBlocks) {
-      if (other != this && toRect().overlaps(other.toRect())) {
-        position = originalPosition.clone();
-        // ✅ NEW: Play error sound for invalid placement
-        AssetManager.playSfx('sfx_error');
-        return;
-      }
+    // ✅ FIXED: More robust collision detection with other active blocks
+    if (_hasCollisionWithActiveBlocks(scene, snapPosition)) {
+      position = originalPosition.clone();
+      AssetManager.playSfx('sfx_error');
+      return;
     }
 
     // Check if block can be placed at snap position
     if (!scene.canPlaceBlock(this, snapPosition)) {
       position = originalPosition.clone();
-      // ✅ NEW: Play error sound for invalid placement
       AssetManager.playSfx('sfx_error');
       return;
     }
 
-    // ✅ IMPROVED: Precise positioning relative to scene
+    // ✅ FIXED: More precise positioning relative to scene
     position = snapPosition - scene.position;
     isLocked = true;
 
-    // ✅ NEW: Play successful placement sound
     AssetManager.playSfx('sfx_drop');
 
     // Mark grid cells as occupied
     scene.markBlockOccupied(this, snapPosition);
     scene.activeBlocks.remove(this);
 
-    // ✅ FIX: Update original position to prevent visual duplication
+    // Update original position to prevent visual duplication
     originalPosition = position.clone();
 
     // Spawn new blocks if all are placed
@@ -121,6 +128,39 @@ class BlockComponent extends PositionComponent
     super.onDragEnd(event);
   }
 
+  // ✅ FIXED: Improved collision detection with tolerance
+  bool _hasCollisionWithActiveBlocks(GameScene scene, Vector2 snapPosition) {
+    final futureRect = _getRectAtPosition(snapPosition);
+    
+    for (final other in scene.activeBlocks) {
+      if (other != this && !other.isLocked) {
+        final otherRect = other.toRect();
+        if (_rectsOverlapWithTolerance(futureRect, otherRect)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  // ✅ FIXED: Better rectangle overlap detection with tolerance
+  bool _rectsOverlapWithTolerance(Rect rect1, Rect rect2) {
+    return rect1.left < rect2.right - _collisionTolerance &&
+           rect2.left < rect1.right - _collisionTolerance &&
+           rect1.top < rect2.bottom - _collisionTolerance &&
+           rect2.top < rect1.bottom - _collisionTolerance;
+  }
+
+  // ✅ FIXED: Helper method to get rectangle at specific position
+  Rect _getRectAtPosition(Vector2 pos) {
+    return Rect.fromLTWH(
+      pos.x,
+      pos.y,
+      size.x,
+      size.y,
+    );
+  }
+
   @override
   void onDragCancel(DragCancelEvent event) {
     if (isLocked) return;
@@ -129,13 +169,11 @@ class BlockComponent extends PositionComponent
     priority = 1; // Return to normal priority
     position = originalPosition.clone();
     
-    // ✅ NEW: Play cancel sound
     AssetManager.playSfx('sfx_error');
     
     super.onDragCancel(event);
   }
 
-  // ✅ NEW: Reset to original position (for undo)
   void resetToOriginal() {
     position = originalPosition.clone();
     isLocked = false;
@@ -143,13 +181,12 @@ class BlockComponent extends PositionComponent
     priority = 1;
   }
 
-  // ✅ NEW: Update original position (when block spawns)
   void updateOriginalPosition(Vector2 newPosition) {
     originalPosition = newPosition.clone();
     position = newPosition.clone();
   }
 
-  // ✅ NEW: Get bounding rectangle for collision detection
+  // ✅ FIXED: More precise bounding rectangle calculation
   Rect toRect() {
     return Rect.fromLTWH(
       absolutePosition.x,
@@ -159,7 +196,6 @@ class BlockComponent extends PositionComponent
     );
   }
 
-  // ✅ NEW: Visual feedback for dragging
   @override
   void render(Canvas canvas) {
     super.render(canvas);
@@ -180,14 +216,15 @@ class BlockComponent extends PositionComponent
     }
   }
 
-  // ✅ NEW: Check if block can be placed anywhere (for game over detection)
+  // ✅ FIXED: More comprehensive placement checking
   bool canBePlacedAnywhere(GameScene scene) {
     const int extendedGridSize = GameScene.extendedGridSize;
     
     for (int row = 1; row < extendedGridSize - 1; row++) {
       for (int col = 1; col < extendedGridSize - 1; col++) {
         final testPosition = scene.gridPositions[row][col];
-        if (scene.canPlaceBlock(this, testPosition)) {
+        if (scene.canPlaceBlock(this, testPosition) && 
+            !_hasCollisionWithActiveBlocks(scene, testPosition)) {
           return true;
         }
       }
@@ -195,7 +232,6 @@ class BlockComponent extends PositionComponent
     return false;
   }
 
-  // ✅ NEW: Get number of cells in this block
   int get cellCount {
     int count = 0;
     for (final row in shape) {
@@ -206,7 +242,6 @@ class BlockComponent extends PositionComponent
     return count;
   }
 
-  // ✅ NEW: Get shape dimensions
   Vector2 get shapeDimensions {
     return Vector2(shape[0].length.toDouble(), shape.length.toDouble());
   }
