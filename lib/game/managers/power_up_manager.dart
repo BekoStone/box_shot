@@ -1,7 +1,3 @@
-// File: lib/game/managers/power_up_manager.dart
-
-// ignore_for_file: avoid_print
-
 import 'package:flame/components.dart';
 import 'package:flame/effects.dart';
 import 'package:flutter/material.dart';
@@ -346,7 +342,7 @@ class PowerUpManager {
       position: position,
       size: Vector2(GameScene.cellSize, GameScene.cellSize),
       paint: Paint()
-        ..color = Colors.yellow.withOpacity(0.7)
+        ..color = Colors.yellow.withAlpha(179)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3,
     );

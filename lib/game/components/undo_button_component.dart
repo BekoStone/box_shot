@@ -29,7 +29,7 @@ class UndoButtonComponent extends PositionComponent with TapCallbacks {
     background = RectangleComponent(
       size: size,
       paint: Paint()
-        ..color = isEnabled() ? Colors.green.withOpacity(0.8) : Colors.grey.withOpacity(0.5)
+        ..color = isEnabled() ? Colors.green.withAlpha(204) : Colors.grey.withAlpha(128)
         ..style = PaintingStyle.fill,
     );
     
@@ -37,7 +37,7 @@ class UndoButtonComponent extends PositionComponent with TapCallbacks {
     final border = RectangleComponent(
       size: size,
       paint: Paint()
-        ..color = Colors.white.withOpacity(0.3)
+        ..color = Colors.white.withAlpha(77)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
     );
@@ -68,8 +68,8 @@ class UndoButtonComponent extends PositionComponent with TapCallbacks {
     
     // Update background color
     background.paint.color = enabled 
-        ? (_isPressed ? Colors.green.shade700 : Colors.green.withOpacity(0.8))
-        : Colors.grey.withOpacity(0.5);
+        ? (_isPressed ? Colors.green.shade700 : Colors.green.withAlpha(204))
+        : Colors.grey.withAlpha(128);
     
     // Update text color
     label.textRenderer = TextPaint(

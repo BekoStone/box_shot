@@ -1,7 +1,3 @@
-// File: lib/game/managers/coin_manager.dart
-
-// ignore_for_file: avoid_print
-
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/asset_manager.dart';
 import 'power_up_manager.dart';

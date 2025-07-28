@@ -1,7 +1,3 @@
-// File: lib/game/components/game_scene.dart - COMPLETE REPLACEMENT
-
-// ignore_for_file: avoid_print
-
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/material.dart';
@@ -10,14 +6,16 @@ import '../factory/shape_factory.dart';
 import '../managers/scoring_manager.dart';
 import '../managers/game_over_manager.dart';
 import '../managers/undo_manager.dart';
-import '../managers/power_up_manager.dart';  // ✅ NEW
-import '../managers/coin_manager.dart';      // ✅ NEW  
-import '../managers/achievement_manager.dart'; // ✅ NEW
+import '../managers/power_up_manager.dart';
+import '../managers/coin_manager.dart';
+import '../managers/achievement_manager.dart';
 import '../game_state.dart';
 import '../../services/asset_manager.dart';
 import 'block_component.dart';
 import 'block_slot_component.dart' as slot;
 import 'undo_button_component.dart';
+import 'power_up_panel_component.dart'; // ✅ NEW: Added import
+
 
 class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCallbacks {
   static const int gridSize = 8;
@@ -40,12 +38,12 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
   final ScoringManager scoring = ScoringManager();
   final UndoManager undoManager = UndoManager();
   
-  // ✅ NEW: Enhancement managers  
+  // ✅ Enhancement managers  
   final PowerUpManager powerUpManager = PowerUpManager();
   final CoinManager coinManager = CoinManager();
   final AchievementManager achievementManager = AchievementManager();
   
-  // ✅ NEW: Game tracking
+  // ✅ Game tracking
   bool _usedUndoThisGame = false;
   int _blocksPlacedThisGame = 0;
   int _coinsEarnedThisGame = 0;
@@ -55,10 +53,15 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
   late TextComponent scoreDisplay;
   late TextComponent levelDisplay;
   late TextComponent comboDisplay;
-  late TextComponent coinDisplay; // ✅ NEW
+  late TextComponent coinDisplay;
   late UndoButtonComponent undoButtonComponent;
-  late RectangleComponent powerUpButton; // ✅ NEW
-  late TextComponent powerUpButtonText; // ✅ NEW
+  
+  // ✅ NEW: Power-up panel instead of old button
+  late PowerUpPanelComponent powerUpPanel;
+  
+  // ✅ KEPT: Original power-up button components (commented out but preserved)
+  // late RectangleComponent powerUpButton;
+  // late TextComponent powerUpButtonText;
   
   bool _gameOver = false;
   bool _gameOverProcessed = false;
@@ -133,7 +136,7 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
     
     levelDisplay = TextComponent(
       text: 'Level: 1',
-      position: Vector2(screenSize.x - 120, 50),
+      position: Vector2(screenSize.x - 200, 50), // ✅ MOVED: Adjusted for power-up panel space
       textRenderer: TextPaint(style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
     );
     add(levelDisplay);
@@ -145,7 +148,7 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
     );
     add(comboDisplay);
 
-    // ✅ NEW: Coin display
+    // ✅ Coin display
     coinDisplay = TextComponent(
       text: '💰 ${coinManager.currentCoins}',
       position: Vector2(20, 200),
@@ -153,11 +156,16 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
     );
     add(coinDisplay);
 
-    // ✅ NEW: Power-up button
+    // ✅ NEW: Power-up panel instead of old button
+    powerUpPanel = PowerUpPanelComponent();
+    add(powerUpPanel);
+
+    // ✅ PRESERVED: Original power-up button code (commented out but kept for reference)
+    /*
     powerUpButton = RectangleComponent(
       position: Vector2(20, 150),
       size: Vector2(120, 35),
-      paint: Paint()..color = Colors.purple.withOpacity(0.8)..style = PaintingStyle.fill,
+      paint: Paint()..color = Colors.purple.withAlpha(204)..style = PaintingStyle.fill,
     );
     add(powerUpButton);
     
@@ -168,9 +176,10 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
       textRenderer: TextPaint(style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
     );
     add(powerUpButtonText);
+    */
     
     undoButtonComponent = UndoButtonComponent(
-      position: Vector2(screenSize.x - 140, 85),
+      position: Vector2(screenSize.x - 230, 85), // ✅ MOVED: Adjusted for power-up panel space
       onPressed: onUndoButtonTapped,
       getText: () {
         final remaining = undoManager.remainingUndos;
@@ -195,8 +204,11 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
       comboDisplay.text = '';
     }
 
-    // ✅ NEW: Update coin display
+    // ✅ Update coin display
     coinDisplay.text = '💰 ${coinManager.currentCoins}';
+    
+    // ✅ NEW: Update power-up panel
+    powerUpPanel.updateDisplay();
     
     undoButtonComponent.updateAppearance();
   }
@@ -747,23 +759,25 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
   bool get isGameOver => _gameOver;
   double get gridFillPercentage => GameOverManager.getGridFillPercentage(this);
   
-  // ✅ NEW: Enhanced tap handling for power-ups AND power-up button
+  // ✅ MODIFIED: Enhanced tap handling for power-ups (removed old power-up button check)
   @override
   bool onTapUp(TapUpEvent event) {
+    // ✅ REMOVED: Old power-up button tap check (now handled by power-up panel)
+    /*
     // Check power-up button tap
     final powerUpButtonRect = Rect.fromLTWH(20, 150, 120, 35);
     if (powerUpButtonRect.contains(event.localPosition.toOffset())) {
       _showPowerUpMenu();
       return true;
     }
+    */
 
     // Check if we're waiting for power-up target
     if (powerUpManager.isWaitingForTarget) {
       final success = powerUpManager.usePowerUpAt(this, event.localPosition);
       if (success) {
         print('✅ Power-up used successfully');
-        gameRef.overlays.remove('PowerUpMenu');
-        _updateUI();
+        _updateUI(); // ✅ CHANGED: Update UI instead of removing overlay
         return true;
       } else {
         print('❌ Invalid power-up target');
@@ -774,64 +788,67 @@ class GameScene extends PositionComponent with HasGameRef<BoxHooksGame>, TapCall
     return false;
   }
   
-  // ✅ NEW: Show power-up menu
+  // ✅ PRESERVED: Old power-up menu methods (kept for reference but not used)
+  /*
   void _showPowerUpMenu() {
     print('🔥 Opening power-up menu');
     gameRef.overlays.add('PowerUpMenu');
   }
-
+  */
   void _showUndoOfferDialog() {
-    undoManager.addUndos(3);
-    _updateUI();
-    AssetManager.playSfx('sfx_reward');
-    print('🎁 Granted 3 bonus undos!');
-  }
+   undoManager.addUndos(3);
+   _updateUI();
+   AssetManager.playSfx('sfx_reward');
+   print('🎁 Granted 3 bonus undos!');
+ }
 
-  // ✅ NEW: Public power-up methods
-  void activatePowerUp(PowerUpType type) {
-    powerUpManager.activatePowerUp(type);
-  }
+ // ✅ Power-up system integration methods
+ void activatePowerUp(PowerUpType type) {
+   powerUpManager.activatePowerUp(type);
+ }
 
-  void cancelPowerUp() {
-    powerUpManager.cancelActivePowerUp();
-  }
+ void cancelPowerUp() {
+   powerUpManager.cancelActivePowerUp();
+ }
 
-  bool hasPowerUp(PowerUpType type) {
-    return powerUpManager.hasPowerUp(type);
-  }
+ bool hasPowerUp(PowerUpType type) {
+   return powerUpManager.hasPowerUp(type);
+ }
 
-  // ✅ NEW: Public coin methods
-  int getCurrentCoins() {
-    return coinManager.currentCoins;
-  }
+ // ✅ Coin management methods
+ int getCurrentCoins() {
+   return coinManager.currentCoins;
+ }
 
-  bool purchasePowerUp(PowerUpType type) {
-    return coinManager.purchasePowerUp(type, powerUpManager);
-  }
+ bool purchasePowerUp(PowerUpType type) {
+   return coinManager.purchasePowerUp(type, powerUpManager);
+ }
 
-  int getCoinsEarnedThisGame() {
-    return _coinsEarnedThisGame;
-  }
+ int getCoinsEarnedThisGame() {
+   return _coinsEarnedThisGame;
+ }
 
-  // ✅ NEW: Public achievement methods
-  List<Achievement> getUnlockedAchievements() {
-    return achievementManager.getUnlockedAchievements();
-  }
+ // ✅ Achievement system methods
+ List<Achievement> getUnlockedAchievements() {
+   return achievementManager.getUnlockedAchievements();
+ }
 
-  double getAchievementProgress() {
-    return achievementManager.getCompletionPercentage();
-  }
+ double getAchievementProgress() {
+   return achievementManager.getCompletionPercentage();
+ }
 
-  List<String> getRecentlyUnlockedAchievements() {
-    return achievementManager.getRecentlyUnlocked();
-  }
+ List<String> getRecentlyUnlockedAchievements() {
+   return achievementManager.getRecentlyUnlocked();
+ }
 
-  // ✅ NEW: Power-up inventory access
-  Map<PowerUpType, int> getPowerUpInventory() {
-    return powerUpManager.inventory;
-  }
+ // ✅ Power-up inventory access
+ Map<PowerUpType, int> getPowerUpInventory() {
+   return powerUpManager.inventory;
+ }
 
-  void hidePowerUpMenu() {
-    gameRef.overlays.remove('PowerUpMenu');
-  }
+ // ✅ PRESERVED: Old overlay methods (kept for compatibility)
+ void hidePowerUpMenu() {
+   gameRef.overlays.remove('PowerUpMenu');
+ }
+ 
 }

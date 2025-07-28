@@ -1,5 +1,3 @@
-// File: lib/ui/screens/settings_screen.dart
-
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 

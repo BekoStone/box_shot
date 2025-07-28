@@ -1,5 +1,3 @@
-// File: lib/ui/overlays/power_up_menu_overlay.dart - NEW SEPARATE FILE
-
 import 'package:flutter/material.dart';
 import '../../game/managers/power_up_manager.dart';
 
@@ -31,9 +29,9 @@ class _PowerUpMenuOverlayState extends State<PowerUpMenuOverlay> {
       child: Container(
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.9),
+          color: Colors.black.withAlpha(230),
           borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.purple.withOpacity(0.7), width: 2),
+          border: Border.all(color: Colors.purple.withAlpha(179), width: 2),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -90,8 +88,8 @@ class _PowerUpMenuOverlayState extends State<PowerUpMenuOverlay> {
                     height: 100,
                     decoration: BoxDecoration(
                       color: hasItem 
-                          ? data.color.withOpacity(0.3)
-                          : Colors.grey.withOpacity(0.2),
+                          ? data.color.withAlpha(77)
+                          : Colors.grey.withAlpha(51),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: hasItem ? data.color : Colors.grey,
@@ -119,7 +117,7 @@ class _PowerUpMenuOverlayState extends State<PowerUpMenuOverlay> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: hasItem ? data.color.withOpacity(0.8) : Colors.grey.withOpacity(0.5),
+                            color: hasItem ? data.color.withAlpha(204) : Colors.grey.withAlpha(128),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
@@ -175,7 +173,6 @@ class _PowerUpMenuOverlayState extends State<PowerUpMenuOverlay> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () {
-                      // TODO: Open power-up store
                       widget.onCancel();
                     },
                     style: ElevatedButton.styleFrom(

@@ -1,7 +1,3 @@
-// File: lib/game/box_hooks_game.dart - COMPLETE REPLACEMENT
-
-// ignore_for_file: avoid_print
-
 import 'package:flame/game.dart';
 import 'package:flame/events.dart';
 import '../services/asset_manager.dart';
@@ -177,7 +173,6 @@ class BoxHooksGame extends FlameGame with DragCallbacks, TapCallbacks, HasCollis
 
   void openPowerUpStore() {
     print('🛒 Opening power-up store...');
-    // TODO: Implement power-up store overlay
     AssetManager.playSfx('sfx_click');
   }
 
@@ -331,12 +326,10 @@ class BoxHooksGame extends FlameGame with DragCallbacks, TapCallbacks, HasCollis
 
   void toggleMusic() {
     print('🎵 Music toggle requested');
-    // TODO: Implement music toggle with settings persistence
   }
 
   void toggleSoundEffects() {
     print('🔊 SFX toggle requested');
-    // TODO: Implement SFX toggle with settings persistence
   }
 
   // ✅ NEW: Debug methods for testing

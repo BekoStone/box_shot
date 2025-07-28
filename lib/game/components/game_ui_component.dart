@@ -4,7 +4,6 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/material.dart';
 import '../box_hooks_game.dart';
-import '../managers/power_up_manager.dart';
 
 class GameUIComponent extends PositionComponent with HasGameRef<BoxHooksGame>, TapCallbacks {
   late RectangleComponent powerUpButton;
@@ -25,7 +24,7 @@ class GameUIComponent extends PositionComponent with HasGameRef<BoxHooksGame>, T
       position: Vector2(screenSize.x - 100, 150),
       size: Vector2(80, 40),
       paint: Paint()
-        ..color = Colors.purple.withOpacity(0.8)
+        ..color = Colors.purple.withAlpha(204)
         ..style = PaintingStyle.fill,
     );
     

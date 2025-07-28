@@ -1,7 +1,3 @@
-// File: lib/game/managers/game_over_manager.dart - FIXED VERSION
-
-// ignore_for_file: avoid_print
-
 import 'dart:ui';
 
 import 'package:flame/components.dart';

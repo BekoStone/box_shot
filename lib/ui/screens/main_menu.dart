@@ -1,5 +1,3 @@
-// File: lib/ui/screens/main_menu.dart
-
 import 'package:flutter/material.dart';
 import '../../core/theme.dart';  // ✅ FIXED: Now exists
 import '../../core/assets.dart'; // ✅ FIXED: Updated assets
@@ -70,7 +68,7 @@ class MainMenuScreen extends StatelessWidget {
                           Shadow(
                             offset: const Offset(2, 2),
                             blurRadius: 4,
-                            color: Colors.black.withOpacity(0.3),
+                            color: Colors.black.withAlpha(77),
                           ),
                         ],
                       ),
@@ -114,7 +112,7 @@ class MainMenuScreen extends StatelessWidget {
           right: 20,
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.2),
+              color: Colors.black.withAlpha(51),
               borderRadius: BorderRadius.circular(25),
             ),
             child: IconButton(
@@ -149,7 +147,7 @@ class MenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: 250, // Fixed width for consistency
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
@@ -159,7 +157,7 @@ class MenuButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
           ),
           elevation: 4,
-          shadowColor: Colors.black.withOpacity(0.3),
+          shadowColor: Colors.black.withAlpha(77),
         ),
         onPressed: onPressed,
         child: Row(

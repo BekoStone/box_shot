@@ -1,5 +1,3 @@
-// File: lib/src/app.dart - ULTRA SIMPLE TEST
-
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import '../game/box_hooks_game.dart';
@@ -54,7 +52,7 @@ class AppRoot extends StatelessWidget {
           
           // ✅ ULTRA SIMPLE TEST - Just show big red text
           'PowerUpMenu': (context, _) => Container(
-                color: Colors.black.withOpacity(0.9),
+                color: Colors.black.withAlpha(230),
                 child: const Center(
                   child: Text(
                     'POWER-UP MENU WORKS!\n\nTap anywhere to close',

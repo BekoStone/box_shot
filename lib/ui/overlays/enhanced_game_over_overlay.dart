@@ -1,5 +1,3 @@
-// File: lib/ui/overlays/enhanced_game_over_overlay.dart
-
 import 'package:flutter/material.dart';
 
 class EnhancedGameOverOverlay extends StatelessWidget {
@@ -39,7 +37,7 @@ class EnhancedGameOverOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black.withOpacity(0.85),
+      color: Colors.black.withAlpha(217),
       child: Center(
         child: Container(
           margin: const EdgeInsets.all(20),
@@ -49,7 +47,7 @@ class EnhancedGameOverOverlay extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.3),
+                color: Colors.black.withAlpha(77),
                 blurRadius: 15,
                 offset: const Offset(0, 8),
               ),
@@ -76,7 +74,7 @@ class EnhancedGameOverOverlay extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.2),
+                      color: Colors.amber.withAlpha(51),
                       borderRadius: BorderRadius.circular(15),
                       border: Border.all(color: Colors.amber, width: 1),
                     ),
@@ -107,7 +105,7 @@ class EnhancedGameOverOverlay extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withAlpha(51),
                     borderRadius: BorderRadius.circular(15),
                   ),
                   child: Column(
@@ -135,7 +133,7 @@ class EnhancedGameOverOverlay extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.amber.withOpacity(0.3),
+                            color: Colors.amber.withAlpha(77),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
@@ -157,7 +155,7 @@ class EnhancedGameOverOverlay extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: Colors.white.withAlpha(26),
                     borderRadius: BorderRadius.circular(15),
                   ),
                   child: Column(
@@ -393,9 +391,9 @@ class EnhancedGameOverOverlay extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.2),
+                    color: Colors.blue.withAlpha(51),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.blue.withOpacity(0.5)),
+                    border: Border.all(color: Colors.blue.withAlpha(128)),
                   ),
                   child: const Row(
                     children: [
@@ -429,7 +427,7 @@ class EnhancedGameOverOverlay extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            color: Colors.white.withAlpha(26),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(

@@ -1,7 +1,3 @@
-// File: lib/game/managers/scoring_manager.dart
-
-// ignore_for_file: avoid_print
-
 class ScoringManager {
   int _currentScore = 0;
   int _level = 1;

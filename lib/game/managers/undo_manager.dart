@@ -1,7 +1,3 @@
-// File: lib/game/managers/undo_manager.dart - FIXED VERSION
-
-// ignore_for_file: avoid_print
-
 import 'package:flame/components.dart';
 import '../components/block_component.dart';
 

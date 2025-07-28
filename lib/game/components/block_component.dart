@@ -203,7 +203,7 @@ class BlockComponent extends PositionComponent
     // Add subtle glow effect when dragging
     if (_isDragging) {
       final glowPaint = Paint()
-        ..color = Colors.white.withOpacity(0.3)
+        ..color = Colors.white.withAlpha(77)
         ..maskFilter = const MaskFilter.blur(BlurStyle.outer, 3);
       
       canvas.drawRRect(

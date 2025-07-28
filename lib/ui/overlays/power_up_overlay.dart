@@ -1,5 +1,3 @@
-// File: lib/ui/overlays/power_up_overlay.dart
-
 import 'package:flutter/material.dart';
 import '../../game/managers/power_up_manager.dart';
 
@@ -31,9 +29,9 @@ class _PowerUpOverlayState extends State<PowerUpOverlay> {
       child: Container(
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.8),
+          color: Colors.black.withAlpha(204),
           borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.blue.withOpacity(0.5), width: 2),
+          border: Border.all(color: Colors.blue.withAlpha(128), width: 2),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -79,8 +77,8 @@ class _PowerUpOverlayState extends State<PowerUpOverlay> {
                     height: 90,
                     decoration: BoxDecoration(
                       color: hasItem 
-                          ? data.color.withOpacity(0.2)
-                          : Colors.grey.withOpacity(0.2),
+                          ? data.color.withAlpha(51)
+                          : Colors.grey.withAlpha(51),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: hasItem ? data.color : Colors.grey,
